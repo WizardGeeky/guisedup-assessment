@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  avatarUrl    String?  @map("avatar_url")
+  bio          String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  posts         Post[]
+  interactions  Interaction[]
+  refreshTokens RefreshToken[]
+
+  // Relationships — as source (follower) and target (following)
+  relationshipsAsSource UserRelationship[] @relation("SourceRelationships")
+  relationshipsAsTarget UserRelationship[] @relation("TargetRelationships")
+
+  @@index([email])
+  @@index([username])
+  @@map("users")
+}
+
+model Post {
+  id               String   @id @default(uuid()) @db.Uuid
+  authorId         String   @map("author_id") @db.Uuid
+  text             String
+  imageUrl         String?  @map("image_url")
+  authenticityScore Float   @default(0.5) @map("authenticity_score")
+  // Stored as JSON string representing float[] (mocked pgvector)
+  embeddingVector  String?  @map("embedding_vector") @db.Text
+  embeddingStatus  EmbeddingStatus @default(PENDING) @map("embedding_status")
+  viewCount        Int      @default(0) @map("view_count")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  author       User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  interactions Interaction[]
+  embeddingJob EmbeddingJob?
+
+  @@index([authorId])
+  @@index([createdAt(sort: Desc)])
+  @@index([embeddingStatus])
+  @@index([authenticityScore(sort: Desc)])
+  // Composite: feed retrieval by author + time
+  @@index([authorId, createdAt(sort: Desc)])
+  @@map("posts")
+}
+
+model Interaction {
+  id        String          @id @default(uuid()) @db.Uuid
+  userId    String          @map("user_id") @db.Uuid
+  postId    String          @map("post_id") @db.Uuid
+  type      InteractionType
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  // Composite unique: one of each type per user per post
+  @@unique([userId, postId, type])
+  // Index for counting interactions per post
+  @@index([postId, type])
+  // Index for relationship depth queries
+  @@index([userId, createdAt(sort: Desc)])
+  // Index for author-side aggregation (who interacted with MY posts)
+  @@index([postId, userId])
+  @@map("interactions")
+}
+
+model UserRelationship {
+  id             String   @id @default(uuid()) @db.Uuid
+  sourceUserId   String   @map("source_user_id") @db.Uuid
+  targetUserId   String   @map("target_user_id") @db.Uuid
+  // Composite depth score: DM count + reply count + reaction count, updated async
+  depthScore     Float    @default(0.0) @map("depth_score")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  sourceUser User @relation("SourceRelationships", fields: [sourceUserId], references: [id], onDelete: Cascade)
+  targetUser User @relation("TargetRelationships", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceUserId, targetUserId])
+  // Feed query: given viewer, find all targets with high depth
+  @@index([sourceUserId, depthScore(sort: Desc)])
+  @@map("user_relationships")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  revoked   Boolean  @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model EmbeddingJob {
+  id        String          @id @default(uuid()) @db.Uuid
+  postId    String          @unique @map("post_id") @db.Uuid
+  status    EmbeddingJobStatus @default(QUEUED)
+  attempts  Int             @default(0)
+  error     String?
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("embedding_jobs")
+}
+
+enum InteractionType {
+  VIEW
+  REPLY
+  REACTION
+}
+
+enum EmbeddingStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+enum EmbeddingJobStatus {
+  QUEUED
+  PROCESSING
+  DONE
+  FAILED
+}
