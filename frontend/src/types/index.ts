@@ -63,10 +63,12 @@ export type TabParamList = {
   Search: undefined;
   Create: undefined;
   Notifications: undefined;
+  MyPosts: undefined;
   Profile: undefined;
 };
 
 export type ProfileStackParamList = {
   ProfileHome: undefined;
   Settings: undefined;
+  EditProfile: undefined;
 };

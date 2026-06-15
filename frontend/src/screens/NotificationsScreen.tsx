@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ScrollView, ActivityIndicator, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { TabParamList } from '../types';
 import { useColors, Colors } from '../context/ThemeContext';
 import { typography } from '../theme/typography';
 import { spacing } from '../theme/spacing';
@@ -12,12 +15,16 @@ import Avatar from '../components/atoms/Avatar';
 import AppText from '../components/atoms/Text';
 import EmptyState from '../components/molecules/EmptyState';
 
+type NotifNavProp = BottomTabNavigationProp<TabParamList, 'Notifications'>;
+
 interface PostActivity {
   post: ApiPost;
   counts: InteractionCounts;
 }
 
-const NotificationsScreen: React.FC = () => {
+interface NotificationsScreenProps { navigation: NotifNavProp; }
+
+const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ navigation }) => {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -48,14 +55,20 @@ const NotificationsScreen: React.FC = () => {
     void load();
   }, []);
 
+  const Header = (
+    <View style={styles.header}>
+      <TouchableOpacity onPress={() => navigation.navigate('Feed')} activeOpacity={0.7} style={styles.backBtn}>
+        <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+      </TouchableOpacity>
+      <AppText variant="h3" style={styles.screenTitle}>activity</AppText>
+      <View style={styles.backBtn} />
+    </View>
+  );
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <AppText variant="h3" style={styles.screenTitle}>
-            activity
-          </AppText>
-        </View>
+        {Header}
         <View style={styles.loadingContainer}>
           <ActivityIndicator color={colors.accent} />
         </View>
@@ -68,11 +81,7 @@ const NotificationsScreen: React.FC = () => {
   if (!hasActivity) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.emptyHeader}>
-          <AppText variant="h3" style={styles.screenTitle}>
-            activity
-          </AppText>
-        </View>
+        {Header}
         <EmptyState
           icon="🔔"
           title="all quiet here"
@@ -84,11 +93,7 @@ const NotificationsScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <AppText variant="h3" style={styles.screenTitle}>
-          activity
-        </AppText>
-      </View>
+      {Header}
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -137,16 +142,19 @@ function createStyles(c: Colors) {
       backgroundColor: c.background,
     },
     header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
       paddingHorizontal: spacing.lg,
       paddingTop: spacing.sm,
       paddingBottom: spacing.md,
       borderBottomWidth: 1,
       borderBottomColor: c.border,
     },
-    emptyHeader: {
-      paddingHorizontal: spacing.lg,
-      paddingTop: spacing.sm,
-      paddingBottom: spacing.md,
+    backBtn: {
+      width: 36, height: 36, borderRadius: 10,
+      backgroundColor: c.surface2,
+      alignItems: 'center', justifyContent: 'center',
     },
     screenTitle: {
       color: c.textPrimary,

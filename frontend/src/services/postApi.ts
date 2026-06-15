@@ -26,4 +26,13 @@ export const postApi = {
     const res = await apiClient.get<ApiSuccess<ApiPost[]>>('/posts/user/me');
     return res.data.data;
   },
+
+  async updatePost(id: string, text: string): Promise<ApiPost> {
+    const res = await apiClient.put<ApiSuccess<ApiPost>>(`/posts/${id}`, { text });
+    return res.data.data;
+  },
+
+  async deletePost(id: string): Promise<void> {
+    await apiClient.delete(`/posts/${id}`);
+  },
 };

@@ -136,6 +136,20 @@ export const postRepository = {
     });
   },
 
+  async updatePost(id: string, authorId: string, text: string): Promise<PostWithAuthor | null> {
+    const post = await prisma.post.findUnique({ where: { id } });
+    if (!post || post.authorId !== authorId) return null;
+    await prisma.post.update({ where: { id }, data: { text } });
+    return this.findWithAuthor(id);
+  },
+
+  async deletePost(id: string, authorId: string): Promise<boolean> {
+    const post = await prisma.post.findUnique({ where: { id } });
+    if (!post || post.authorId !== authorId) return false;
+    await prisma.post.delete({ where: { id } });
+    return true;
+  },
+
   // Get posts by IDs (for search results enrichment)
   async findManyByIds(ids: string[]): Promise<PostWithAuthor[]> {
     return prisma.post.findMany({

@@ -15,6 +15,7 @@ interface PostListProps {
   isLoading: boolean;
   isRefreshing: boolean;
   hasMore: boolean;
+  ListEmptyComponent?: React.ReactElement;
 }
 
 const SKELETON_COUNT = 3;
@@ -27,6 +28,7 @@ const PostList: React.FC<PostListProps> = ({
   isLoading,
   isRefreshing,
   hasMore,
+  ListEmptyComponent: EmptyOverride,
 }) => {
   const colors = useColors();
 
@@ -54,6 +56,7 @@ const PostList: React.FC<PostListProps> = ({
 
   const ListEmptyComponent = useCallback(() => {
     if (isLoading) return null;
+    if (EmptyOverride) return EmptyOverride;
     return (
       <EmptyState
         icon="✨"
@@ -61,7 +64,7 @@ const PostList: React.FC<PostListProps> = ({
         subtitle="be the first to post something real"
       />
     );
-  }, [isLoading]);
+  }, [isLoading, EmptyOverride]);
 
   if (isLoading && posts.length === 0) {
     return (

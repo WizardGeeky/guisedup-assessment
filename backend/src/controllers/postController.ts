@@ -34,4 +34,27 @@ export const postController = {
       next(err);
     }
   },
+
+  async updatePost(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params as { id: string };
+      const { text } = req.body as { text: string };
+      const userId = req.user!.userId;
+      const post = await postService.updatePost(id, userId, text);
+      sendSuccess(res, post, "Post updated successfully");
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async deletePost(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params as { id: string };
+      const userId = req.user!.userId;
+      await postService.deletePost(id, userId);
+      sendSuccess(res, null, "Post deleted successfully");
+    } catch (err) {
+      next(err);
+    }
+  },
 };

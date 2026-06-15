@@ -52,6 +52,13 @@ const ProfileScreen: React.FC = () => {
 
         {/* Header row */}
         <View style={styles.headerRow}>
+          <TouchableOpacity
+            onPress={() => navigation.getParent()?.navigate('Feed')}
+            style={styles.backBtn}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          </TouchableOpacity>
           <AppText variant="h3" style={styles.headerTitle}>profile</AppText>
           <TouchableOpacity
             onPress={() => navigation.navigate('Settings')}
@@ -93,7 +100,7 @@ const ProfileScreen: React.FC = () => {
             </View>
           </View>
 
-          <Button title="edit profile" onPress={() => {}} variant="secondary" style={styles.editBtn} />
+          <Button title="edit profile" onPress={() => navigation.navigate('EditProfile')} variant="secondary" style={styles.editBtn} />
         </View>
 
         <View style={styles.divider} />
@@ -183,9 +190,13 @@ function createStyles(c: Colors) {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.md,
     },
+    backBtn: {
+      width: 38, height: 38, borderRadius: 12, backgroundColor: c.surface2,
+      alignItems: 'center', justifyContent: 'center',
+    },
     headerTitle: { color: c.textPrimary, fontWeight: typography.weights.bold },
     settingsBtn: {
-      width: 38, height: 38, borderRadius: 19, backgroundColor: c.surface2,
+      width: 38, height: 38, borderRadius: 12, backgroundColor: c.surface2,
       alignItems: 'center', justifyContent: 'center',
     },
     profileBlock: { alignItems: 'center', paddingHorizontal: spacing.xl, paddingBottom: spacing.xl },

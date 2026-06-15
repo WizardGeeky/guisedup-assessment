@@ -45,4 +45,15 @@ export const postService = {
   async getUserPosts(userId: string): Promise<PostWithAuthor[]> {
     return postRepository.findByAuthor(userId);
   },
+
+  async updatePost(postId: string, userId: string, text: string): Promise<PostWithAuthor> {
+    const post = await postRepository.updatePost(postId, userId, text);
+    if (!post) throw new NotFoundError("Post");
+    return post;
+  },
+
+  async deletePost(postId: string, userId: string): Promise<void> {
+    const deleted = await postRepository.deletePost(postId, userId);
+    if (!deleted) throw new NotFoundError("Post");
+  },
 };

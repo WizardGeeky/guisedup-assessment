@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
-import { View, TouchableOpacity, StyleSheet, Animated, Alert } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Animated, Alert, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ApiPost } from '../../services/feedApi';
 import { interactionApi } from '../../services/interactionApi';
@@ -80,9 +80,13 @@ const PostCard: React.FC<PostCardProps> = ({ post, relationshipScore = 0, onReac
 
         <AppText variant="body" style={styles.text}>{post.text}</AppText>
 
-        {post.imageUrl !== null && post.imageUrl !== undefined && (
-          <View style={[styles.imagePlaceholder, { backgroundColor: colors.surface2 }]} />
-        )}
+        {post.imageUrl ? (
+          <Image
+            source={{ uri: post.imageUrl }}
+            style={styles.postImage}
+            resizeMode="cover"
+          />
+        ) : null}
 
         <View style={styles.footer}>
           {/* Heart */}
@@ -107,6 +111,14 @@ const PostCard: React.FC<PostCardProps> = ({ post, relationshipScore = 0, onReac
           <TouchableOpacity style={styles.footerAction} activeOpacity={0.7}>
             <Ionicons name="arrow-redo-outline" size={18} color={colors.textSecondary} />
           </TouchableOpacity>
+
+          {/* Views */}
+          <View style={[styles.footerAction, styles.viewsRight]}>
+            <Ionicons name="eye-outline" size={15} color={colors.textMuted} />
+            <AppText variant="caption" style={[styles.footerCount, { color: colors.textMuted, fontSize: 11 }]}>
+              {post.viewCount ?? 0}
+            </AppText>
+          </View>
         </View>
       </View>
     </TouchableOpacity>
@@ -143,8 +155,8 @@ function createStyles(c: Colors) {
       lineHeight: typography.sizes.md * 1.6,
       marginBottom: spacing.md,
     },
-    imagePlaceholder: {
-      width: '100%', aspectRatio: 16 / 9, borderRadius: 8, marginBottom: spacing.md,
+    postImage: {
+      width: '100%', aspectRatio: 16 / 9, borderRadius: 10, marginBottom: spacing.md,
     },
     footer: {
       flexDirection: 'row',
@@ -155,6 +167,7 @@ function createStyles(c: Colors) {
       borderTopColor: c.border,
     },
     footerAction: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+    viewsRight: { marginLeft: 'auto' },
     footerCount: { color: c.textSecondary, fontSize: typography.sizes.sm },
   });
 }

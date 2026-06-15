@@ -2,7 +2,7 @@ import { Router } from "express";
 import { postController } from "../controllers/postController";
 import { authenticate } from "../middleware/auth";
 import { validate } from "../middleware/validate";
-import { createPostSchema } from "../models/schemas";
+import { createPostSchema, updatePostSchema } from "../models/schemas";
 
 export const postRouter = Router();
 
@@ -52,3 +52,5 @@ postRouter.get("/user/me", authenticate, postController.getUserPosts);
  *       - BearerAuth: []
  */
 postRouter.get("/:id", authenticate, postController.getPost);
+postRouter.put("/:id", authenticate, validate(updatePostSchema), postController.updatePost);
+postRouter.delete("/:id", authenticate, postController.deletePost);

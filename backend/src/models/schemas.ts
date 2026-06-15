@@ -38,6 +38,15 @@ export const createPostSchema = z.object({
   }),
 });
 
+export const updatePostSchema = z.object({
+  body: z.object({
+    text: z
+      .string()
+      .min(1, "Post text cannot be empty")
+      .max(2000, "Post text is too long (max 2000 chars)"),
+  }),
+});
+
 export const interactionSchema = z.object({
   body: z.object({
     postId: z.string().uuid("Invalid post ID"),
