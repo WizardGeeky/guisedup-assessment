@@ -10,6 +10,7 @@ import {
   Animated,
 } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,13 +21,19 @@ import { spacing } from '../theme/spacing';
 import AppText from '../components/atoms/Text';
 import Button from '../components/atoms/Button';
 import { useAuth, getApiError } from '../context/AuthContext';
+import { webInputReset } from '../utils/webStyle';
 
 type LoginNavProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
 interface LoginScreenProps { navigation: LoginNavProp; }
 
 const loginSchema = z.object({
-  email: z.string().min(1, 'email is required').email('must be a valid email'),
-  password: z.string().min(1, 'password is required'),
+  email: z
+    .string()
+    .min(1, 'email is required')
+    .email('enter a valid email address'),
+  password: z
+    .string()
+    .min(1, 'password is required'),
 });
 type LoginForm = z.infer<typeof loginSchema>;
 
@@ -72,7 +79,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   };
 
   const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginForm>({
+    resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
+    mode: 'onTouched',
   });
 
   const onSubmit = async (data: LoginForm) => {
@@ -130,7 +139,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
                 name="email"
                 render={({ field: { onChange, value, onBlur } }) => (
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, webInputReset]}
                     value={value}
                     onChangeText={onChange}
                     onFocus={() => setFocusedField('email')}
@@ -173,7 +182,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
                 render={({ field: { onChange, value, onBlur } }) => (
                   <TextInput
                     ref={passwordRef}
-                    style={styles.input}
+                    style={[styles.input, webInputReset]}
                     value={value}
                     onChangeText={onChange}
                     onFocus={() => setFocusedField('password')}
@@ -300,10 +309,10 @@ function createStyles(c: Colors) {
     inputWrapperError: { borderColor: c.error, backgroundColor: `${c.error}06` },
     inputWrapperFocused: { borderColor: c.accent, backgroundColor: `${c.accent}06` },
     inputIcon: { marginRight: spacing.sm },
-    input: { flex: 1, color: c.textPrimary, fontSize: typography.sizes.md },
+    input: { flex: 1, color: c.textPrimary, fontSize: typography.sizes.md, outlineWidth: 0 } as any,
     eyeBtn: { padding: spacing.xs },
     errorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.xs },
-    errorText: { color: c.error, fontSize: typography.sizes.xs },
+    errorText: { color: c.error, fontSize: typography.sizes.sm, flex: 1 },
     forgotRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 5, marginTop: spacing.sm },
     forgotText: { color: c.accent, fontSize: typography.sizes.md, fontWeight: typography.weights.medium },
     apiErrorRow: {

@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthStackParamList } from '../types';
 import { useColors, Colors } from '../context/ThemeContext';
 import { authApi } from '../services/authApi';
+import { webInputReset } from '../utils/webStyle';
 import { getApiError } from '../context/AuthContext';
 import { typography } from '../theme/typography';
 import { spacing } from '../theme/spacing';
@@ -170,6 +171,7 @@ const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({ navigatio
                 style={[
                   styles.otpBox,
                   otp[i] ? styles.otpBoxFilled : null,
+                  webInputReset,
                 ]}
                 value={otp[i]}
                 onChangeText={(t) => handleChange(t, i)}
@@ -269,7 +271,8 @@ function createStyles(c: Colors) {
       fontSize: 22,
       fontWeight: typography.weights.bold,
       color: c.textPrimary,
-    },
+      outlineWidth: 0,
+    } as any,
     otpBoxFilled: {
       borderColor: c.accent,
       backgroundColor: c.surface2,

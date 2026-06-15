@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { View, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors, Colors } from '../../context/ThemeContext';
+import { webInputReset } from '../../utils/webStyle';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
 
@@ -25,7 +26,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
     <View style={styles.container}>
       <Ionicons name="search-outline" size={17} color={colors.textMuted} style={styles.searchIcon} />
       <TextInput
-        style={styles.input}
+        style={[styles.input, webInputReset]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
@@ -61,7 +62,8 @@ function createStyles(c: Colors) {
       color: c.textPrimary,
       fontSize: typography.sizes.md,
       paddingVertical: 0,
-    },
+      outlineWidth: 0,
+    } as any,
     clearBtn: { padding: spacing.xs, marginLeft: spacing.xs },
   });
 }

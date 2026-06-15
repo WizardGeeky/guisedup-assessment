@@ -10,6 +10,7 @@ import {
   Animated,
 } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,14 +21,26 @@ import { spacing } from '../theme/spacing';
 import AppText from '../components/atoms/Text';
 import Button from '../components/atoms/Button';
 import { useAuth, getApiError } from '../context/AuthContext';
+import { webInputReset } from '../utils/webStyle';
 
 type SignupNavProp = NativeStackNavigationProp<AuthStackParamList, 'Signup'>;
 interface SignupScreenProps { navigation: SignupNavProp; }
 
 const signupSchema = z.object({
-  username: z.string().min(2, 'at least 2 characters').max(30).regex(/^[a-z0-9_]+$/, 'lowercase, numbers & underscores only'),
-  email: z.string().min(1, 'email is required').email('must be a valid email'),
-  password: z.string().min(6, 'at least 6 characters'),
+  username: z
+    .string()
+    .min(1, 'username is required')
+    .min(2, 'at least 2 characters')
+    .max(30, 'max 30 characters')
+    .regex(/^[a-z0-9_]+$/, 'lowercase letters, numbers & underscores only'),
+  email: z
+    .string()
+    .min(1, 'email is required')
+    .email('enter a valid email address'),
+  password: z
+    .string()
+    .min(1, 'password is required')
+    .min(6, 'at least 6 characters'),
 });
 type SignupForm = z.infer<typeof signupSchema>;
 
@@ -74,7 +87,9 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
   };
 
   const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm<SignupForm>({
+    resolver: zodResolver(signupSchema),
     defaultValues: { username: '', email: '', password: '' },
+    mode: 'onTouched',
   });
 
   const onSubmit = async (data: SignupForm) => {
@@ -122,7 +137,7 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
                 name="username"
                 render={({ field: { onChange, value, onBlur } }) => (
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, webInputReset]}
                     value={value}
                     onChangeText={onChange}
                     onFocus={() => setFocusedField('username')}
@@ -160,7 +175,7 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
                 render={({ field: { onChange, value, onBlur } }) => (
                   <TextInput
                     ref={emailRef}
-                    style={styles.input}
+                    style={[styles.input, webInputReset]}
                     value={value}
                     onChangeText={onChange}
                     onFocus={() => setFocusedField('email')}
@@ -199,7 +214,7 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
                 render={({ field: { onChange, value, onBlur } }) => (
                   <TextInput
                     ref={passwordRef}
-                    style={styles.input}
+                    style={[styles.input, webInputReset]}
                     value={value}
                     onChangeText={onChange}
                     onFocus={() => setFocusedField('password')}
@@ -298,10 +313,10 @@ function createStyles(c: Colors) {
     inputWrapperError: { borderColor: c.error, backgroundColor: `${c.error}06` },
     inputWrapperFocused: { borderColor: c.accent, backgroundColor: `${c.accent}06` },
     inputIcon: { marginRight: spacing.sm },
-    input: { flex: 1, color: c.textPrimary, fontSize: typography.sizes.md },
+    input: { flex: 1, color: c.textPrimary, fontSize: typography.sizes.md, outlineWidth: 0 } as any,
     eyeBtn: { padding: spacing.xs },
     errorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.xs },
-    errorText: { color: c.error, fontSize: typography.sizes.xs },
+    errorText: { color: c.error, fontSize: typography.sizes.sm, flex: 1 },
     apiErrorRow: {
       flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
       backgroundColor: `${c.error}12`, borderRadius: 8, padding: spacing.sm, marginTop: spacing.xs,

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import {
   View,
   TextInput,
@@ -9,22 +9,32 @@ import {
   StyleSheet,
   Animated,
 } from 'react-native';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthStackParamList } from '../types';
 import { useColors, Colors } from '../context/ThemeContext';
 import { authApi } from '../services/authApi';
 import { getApiError } from '../context/AuthContext';
+import { webInputReset } from '../utils/webStyle';
 import { typography } from '../theme/typography';
 import { spacing } from '../theme/spacing';
 import AppText from '../components/atoms/Text';
 import Button from '../components/atoms/Button';
 
 type ForgotNavProp = NativeStackNavigationProp<AuthStackParamList, 'ForgotPassword'>;
+interface ForgotPasswordScreenProps { navigation: ForgotNavProp; }
 
-interface ForgotPasswordScreenProps {
-  navigation: ForgotNavProp;
-}
+const forgotSchema = z.object({
+  email: z
+    .string()
+    .min(1, 'email is required')
+    .email('enter a valid email address')
+    .max(254, 'email is too long'),
+});
+type ForgotForm = z.infer<typeof forgotSchema>;
 
 const ANIM_COUNT = 4;
 
@@ -32,19 +42,22 @@ const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navigation 
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const [email, setEmail] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [sent, setSent] = useState(false);
-
-  const fadeAnims = useRef(Array.from({ length: ANIM_COUNT }, () => new Animated.Value(0))).current;
-  const slideAnims = useRef(Array.from({ length: ANIM_COUNT }, () => new Animated.Value(28))).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
   const successScale = useRef(new Animated.Value(0.7)).current;
+  const fadeAnims = useRef(Array.from({ length: ANIM_COUNT }, () => new Animated.Value(0))).current;
+  const slideAnims = useRef(Array.from({ length: ANIM_COUNT }, () => new Animated.Value(28))).current;
+
+  const { control, handleSubmit, setError, watch, formState: { errors, isSubmitting, isSubmitSuccessful } } =
+    useForm<ForgotForm>({
+      resolver: zodResolver(forgotSchema),
+      defaultValues: { email: '' },
+      mode: 'onTouched',
+    });
+
+  const emailValue = watch('email');
 
   useEffect(() => {
-    Animated.stagger(
-      80,
+    Animated.stagger(80,
       fadeAnims.map((fade, i) =>
         Animated.parallel([
           Animated.timing(fade, { toValue: 1, duration: 380, useNativeDriver: true }),
@@ -55,43 +68,27 @@ const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navigation 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const animatedStyle = (i: number) => ({
-    opacity: fadeAnims[i],
-    transform: [{ translateY: slideAnims[i] }],
-  });
+  const anim = (i: number) => ({ opacity: fadeAnims[i], transform: [{ translateY: slideAnims[i] }] });
 
-  const handleSend = async () => {
-    const trimmed = email.trim().toLowerCase();
-    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setError('Please enter a valid email address');
-      return;
-    }
-    setError('');
-    setIsLoading(true);
+  const onSubmit = async (data: ForgotForm) => {
     try {
-      await authApi.forgotPassword(trimmed);
-      setSent(true);
+      await authApi.forgotPassword(data.email.trim().toLowerCase());
       Animated.parallel([
         Animated.spring(successScale, { toValue: 1, friction: 6, tension: 80, useNativeDriver: true }),
         Animated.timing(successOpacity, { toValue: 1, duration: 350, useNativeDriver: true }),
       ]).start();
-      // Navigate to OTP screen after brief delay
       setTimeout(() => {
-        navigation.navigate('OTPVerification', { email: trimmed });
+        navigation.navigate('OTPVerification', { email: data.email.trim().toLowerCase() });
       }, 1200);
     } catch (err) {
-      setError(getApiError(err));
-    } finally {
-      setIsLoading(false);
+      setError('email', { message: getApiError(err) });
     }
   };
 
+  const hasError = !!errors.email;
+
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      {/* Decorative blobs */}
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={styles.blobTL} />
       <View style={styles.blobBR} />
 
@@ -100,59 +97,66 @@ const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navigation 
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Back button */}
-        <Animated.View style={[styles.backRow, animatedStyle(0)]}>
+        <Animated.View style={[styles.backRow, anim(0)]}>
           <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Icon + heading */}
-        <Animated.View style={[styles.headingBlock, animatedStyle(1)]}>
+        <Animated.View style={[styles.headingBlock, anim(1)]}>
           <View style={[styles.iconCircle, { backgroundColor: colors.surface2 }]}>
             <Ionicons name="key-outline" size={32} color={colors.accent} />
           </View>
-          <AppText variant="h2" style={styles.heading}>
-            forgot password?
-          </AppText>
+          <AppText variant="h2" style={styles.heading}>forgot password?</AppText>
           <AppText variant="caption" style={styles.subheading}>
             enter your email and we'll send you a reset code
           </AppText>
         </Animated.View>
 
         {/* Email field */}
-        <Animated.View style={[styles.fieldBlock, animatedStyle(2)]}>
-          <View style={[styles.inputWrapper, error ? styles.inputWrapperError : null]}>
-            <Ionicons
-              name="mail-outline"
-              size={18}
-              color={error ? colors.error : colors.textMuted}
-              style={styles.inputIcon}
-            />
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={(v) => { setEmail(v); setError(''); }}
-              placeholder="your@email.com"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="send"
-              onSubmitEditing={handleSend}
-            />
-          </View>
-          {error.length > 0 && (
+        <Animated.View style={[styles.fieldBlock, anim(2)]}>
+          <AppText variant="label" style={styles.fieldLabel}>email address</AppText>
+          <Controller
+            control={control}
+            name="email"
+            render={({ field: { onChange, value, onBlur } }) => (
+              <View style={[styles.inputWrapper, hasError && styles.inputWrapperError]}>
+                <Ionicons
+                  name="mail-outline"
+                  size={18}
+                  color={hasError ? colors.error : colors.textMuted}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={[styles.input, webInputReset]}
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  placeholder="your@email.com"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="send"
+                  onSubmitEditing={handleSubmit(onSubmit)}
+                />
+                {emailValue.length > 0 && !hasError && (
+                  <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                )}
+              </View>
+            )}
+          />
+          {hasError && (
             <View style={styles.errorRow}>
               <Ionicons name="alert-circle-outline" size={13} color={colors.error} />
-              <AppText variant="caption" style={styles.errorText}>{error}</AppText>
+              <AppText style={styles.errorText}>{errors.email?.message}</AppText>
             </View>
           )}
         </Animated.View>
 
-        {/* Send button */}
-        <Animated.View style={[styles.btnBlock, animatedStyle(3)]}>
-          {sent ? (
+        {/* Action */}
+        <Animated.View style={[styles.btnBlock, anim(3)]}>
+          {isSubmitSuccessful ? (
             <Animated.View
               style={[styles.sentBox, { opacity: successOpacity, transform: [{ scale: successScale }] }]}
             >
@@ -164,9 +168,9 @@ const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navigation 
           ) : (
             <Button
               title="send reset code"
-              onPress={handleSend}
+              onPress={handleSubmit(onSubmit)}
               variant="primary"
-              loading={isLoading}
+              loading={isSubmitting}
               style={styles.sendBtn}
             />
           )}
@@ -223,16 +227,20 @@ function createStyles(c: Colors) {
       lineHeight: typography.sizes.sm * 1.6, paddingHorizontal: spacing.lg,
     },
     fieldBlock: { marginBottom: spacing.xl },
+    fieldLabel: {
+      color: c.textSecondary, fontSize: typography.sizes.sm,
+      fontWeight: typography.weights.medium, marginBottom: spacing.xs,
+    },
     inputWrapper: {
       flexDirection: 'row', alignItems: 'center',
       backgroundColor: c.surface, borderRadius: 14,
       borderWidth: 1.5, borderColor: c.border, paddingHorizontal: spacing.md, height: 52,
     },
-    inputWrapperError: { borderColor: c.error },
+    inputWrapperError: { borderColor: c.error, backgroundColor: `${c.error}06` },
     inputIcon: { marginRight: spacing.sm },
-    input: { flex: 1, color: c.textPrimary, fontSize: typography.sizes.md },
+    input: { flex: 1, color: c.textPrimary, fontSize: typography.sizes.md, outlineWidth: 0 } as any,
     errorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.xs },
-    errorText: { color: c.error, fontSize: typography.sizes.xs },
+    errorText: { color: c.error, fontSize: typography.sizes.sm, flex: 1 },
     btnBlock: {},
     sendBtn: { marginBottom: spacing.xl },
     sentBox: {

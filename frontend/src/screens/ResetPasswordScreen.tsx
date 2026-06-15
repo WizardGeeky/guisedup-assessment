@@ -8,8 +8,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
 } from 'react-native';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +19,7 @@ import { AuthStackParamList } from '../types';
 import { useColors, Colors } from '../context/ThemeContext';
 import { authApi } from '../services/authApi';
 import { getApiError } from '../context/AuthContext';
+import { webInputReset } from '../utils/webStyle';
 import { typography } from '../theme/typography';
 import { spacing } from '../theme/spacing';
 import AppText from '../components/atoms/Text';
@@ -24,23 +27,44 @@ import Button from '../components/atoms/Button';
 
 type ResetNavProp = NativeStackNavigationProp<AuthStackParamList, 'ResetPassword'>;
 type ResetRouteProp = RouteProp<AuthStackParamList, 'ResetPassword'>;
+interface ResetPasswordScreenProps { navigation: ResetNavProp; route: ResetRouteProp; }
 
-interface ResetPasswordScreenProps {
-  navigation: ResetNavProp;
-  route: ResetRouteProp;
+const resetSchema = z
+  .object({
+    password: z
+      .string()
+      .min(6, 'at least 6 characters required')
+      .max(128, 'password is too long'),
+    confirm: z.string().min(1, 'please confirm your password'),
+  })
+  .refine((d) => d.password === d.confirm, {
+    message: 'passwords do not match',
+    path: ['confirm'],
+  });
+type ResetForm = z.infer<typeof resetSchema>;
+
+// Password strength: 0–4
+function getStrength(pwd: string): number {
+  let score = 0;
+  if (pwd.length >= 6) score++;
+  if (pwd.length >= 10) score++;
+  if (/[A-Z]/.test(pwd)) score++;
+  if (/[0-9]/.test(pwd)) score++;
+  if (/[^A-Za-z0-9]/.test(pwd)) score++;
+  return Math.min(score, 4);
 }
+
+const STRENGTH_LABELS = ['', 'weak', 'fair', 'good', 'strong'];
+const STRENGTH_COLORS = ['', '#EF4444', '#F59E0B', '#22C55E', '#16A34A'];
 
 const ResetPasswordScreen: React.FC<ResetPasswordScreenProps> = ({ navigation, route }) => {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const { token } = route.params;
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [focusedField, setFocusedField] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   const confirmRef = useRef<TextInput>(null);
@@ -49,6 +73,16 @@ const ResetPasswordScreen: React.FC<ResetPasswordScreenProps> = ({ navigation, r
   const slideAnim = useRef(new Animated.Value(30)).current;
   const successScale = useRef(new Animated.Value(0.6)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
+
+  const { control, handleSubmit, watch, setError, formState: { errors, isSubmitting } } =
+    useForm<ResetForm>({
+      resolver: zodResolver(resetSchema),
+      defaultValues: { password: '', confirm: '' },
+      mode: 'onTouched',
+    });
+
+  const passwordValue = watch('password');
+  const strength = getStrength(passwordValue);
 
   useEffect(() => {
     Animated.parallel([
@@ -68,21 +102,9 @@ const ResetPasswordScreen: React.FC<ResetPasswordScreenProps> = ({ navigation, r
     ]).start();
   };
 
-  const handleReset = async () => {
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      shake();
-      return;
-    }
-    if (password !== confirm) {
-      setError('Passwords do not match');
-      shake();
-      return;
-    }
-    setError('');
-    setIsLoading(true);
+  const onSubmit = async (data: ResetForm) => {
     try {
-      await authApi.resetPassword(token, password);
+      await authApi.resetPassword(token, data.password);
       setSuccess(true);
       Animated.parallel([
         Animated.spring(successScale, { toValue: 1, friction: 6, tension: 80, useNativeDriver: true }),
@@ -91,19 +113,21 @@ const ResetPasswordScreen: React.FC<ResetPasswordScreenProps> = ({ navigation, r
       setTimeout(() => navigation.navigate('Login'), 2000);
     } catch (err) {
       const msg = getApiError(err);
-      setError(msg);
-      Alert.alert('Reset failed', msg);
+      setError('password', { message: msg });
       shake();
-    } finally {
-      setIsLoading(false);
     }
   };
 
+  const wrapperStyle = (field: string, hasError: boolean) => [
+    styles.inputWrapper,
+    hasError ? styles.inputWrapperError : focusedField === field ? styles.inputWrapperFocused : null,
+  ];
+
+  const iconColor = (field: string, hasError: boolean) =>
+    hasError ? colors.error : focusedField === field ? colors.accent : colors.textMuted;
+
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={styles.blobTL} />
       <View style={styles.blobBR} />
 
@@ -120,9 +144,7 @@ const ResetPasswordScreen: React.FC<ResetPasswordScreenProps> = ({ navigation, r
           <Animated.View style={[styles.successBlock, { opacity: successOpacity, transform: [{ scale: successScale }] }]}>
             <Ionicons name="checkmark-circle" size={72} color={colors.success} />
             <AppText variant="h2" style={styles.successTitle}>password reset!</AppText>
-            <AppText variant="caption" style={styles.successSubtitle}>
-              redirecting you to login...
-            </AppText>
+            <AppText variant="caption" style={styles.successSubtitle}>redirecting you to login...</AppText>
           </Animated.View>
         ) : (
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
@@ -137,71 +159,103 @@ const ResetPasswordScreen: React.FC<ResetPasswordScreenProps> = ({ navigation, r
             </View>
 
             <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
-              {/* Password field */}
+              {/* Password */}
               <View style={styles.fieldGroup}>
-                <View style={[styles.inputWrapper, error ? styles.inputWrapperError : null]}>
-                  <Ionicons
-                    name="lock-closed-outline"
-                    size={18}
-                    color={error ? colors.error : colors.textMuted}
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    value={password}
-                    onChangeText={(v) => { setPassword(v); setError(''); }}
-                    placeholder="new password"
-                    placeholderTextColor={colors.textMuted}
-                    secureTextEntry={!showPassword}
-                    returnKeyType="next"
-                    onSubmitEditing={() => confirmRef.current?.focus()}
-                    blurOnSubmit={false}
-                  />
-                  <TouchableOpacity onPress={() => setShowPassword((v) => !v)} style={styles.eyeBtn} activeOpacity={0.7}>
-                    <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.textMuted} />
-                  </TouchableOpacity>
-                </View>
+                <AppText variant="label" style={styles.fieldLabel}>new password</AppText>
+                <Controller
+                  control={control}
+                  name="password"
+                  render={({ field: { onChange, value, onBlur } }) => (
+                    <View style={wrapperStyle('password', !!errors.password)}>
+                      <Ionicons name="lock-closed-outline" size={18} color={iconColor('password', !!errors.password)} style={styles.inputIcon} />
+                      <TextInput
+                        style={[styles.input, webInputReset]}
+                        value={value}
+                        onChangeText={onChange}
+                        onFocus={() => setFocusedField('password')}
+                        onBlur={() => { setFocusedField(null); onBlur(); }}
+                        placeholder="new password"
+                        placeholderTextColor={colors.textMuted}
+                        secureTextEntry={!showPassword}
+                        returnKeyType="next"
+                        onSubmitEditing={() => confirmRef.current?.focus()}
+                        blurOnSubmit={false}
+                      />
+                      <TouchableOpacity onPress={() => setShowPassword((v) => !v)} style={styles.eyeBtn} activeOpacity={0.7}>
+                        <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                />
+                {/* Strength bar */}
+                {passwordValue.length > 0 && (
+                  <View style={styles.strengthRow}>
+                    <View style={styles.strengthBars}>
+                      {[1, 2, 3, 4].map((level) => (
+                        <View
+                          key={level}
+                          style={[
+                            styles.strengthBar,
+                            { backgroundColor: strength >= level ? STRENGTH_COLORS[strength] : colors.border },
+                          ]}
+                        />
+                      ))}
+                    </View>
+                    <AppText style={[styles.strengthLabel, { color: STRENGTH_COLORS[strength] || colors.textMuted }]}>
+                      {STRENGTH_LABELS[strength]}
+                    </AppText>
+                  </View>
+                )}
+                {errors.password && (
+                  <View style={styles.errorRow}>
+                    <Ionicons name="alert-circle-outline" size={13} color={colors.error} />
+                    <AppText style={styles.errorText}>{errors.password.message}</AppText>
+                  </View>
+                )}
               </View>
 
-              {/* Confirm field */}
+              {/* Confirm */}
               <View style={styles.fieldGroup}>
-                <View style={[styles.inputWrapper, error ? styles.inputWrapperError : null]}>
-                  <Ionicons
-                    name="lock-closed-outline"
-                    size={18}
-                    color={error ? colors.error : colors.textMuted}
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    ref={confirmRef}
-                    style={styles.input}
-                    value={confirm}
-                    onChangeText={(v) => { setConfirm(v); setError(''); }}
-                    placeholder="confirm password"
-                    placeholderTextColor={colors.textMuted}
-                    secureTextEntry={!showConfirm}
-                    returnKeyType="done"
-                    onSubmitEditing={handleReset}
-                  />
-                  <TouchableOpacity onPress={() => setShowConfirm((v) => !v)} style={styles.eyeBtn} activeOpacity={0.7}>
-                    <Ionicons name={showConfirm ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.textMuted} />
-                  </TouchableOpacity>
-                </View>
+                <AppText variant="label" style={styles.fieldLabel}>confirm password</AppText>
+                <Controller
+                  control={control}
+                  name="confirm"
+                  render={({ field: { onChange, value, onBlur } }) => (
+                    <View style={wrapperStyle('confirm', !!errors.confirm)}>
+                      <Ionicons name="lock-closed-outline" size={18} color={iconColor('confirm', !!errors.confirm)} style={styles.inputIcon} />
+                      <TextInput
+                        ref={confirmRef}
+                        style={[styles.input, webInputReset]}
+                        value={value}
+                        onChangeText={onChange}
+                        onFocus={() => setFocusedField('confirm')}
+                        onBlur={() => { setFocusedField(null); onBlur(); }}
+                        placeholder="confirm password"
+                        placeholderTextColor={colors.textMuted}
+                        secureTextEntry={!showConfirm}
+                        returnKeyType="done"
+                        onSubmitEditing={handleSubmit(onSubmit)}
+                      />
+                      <TouchableOpacity onPress={() => setShowConfirm((v) => !v)} style={styles.eyeBtn} activeOpacity={0.7}>
+                        <Ionicons name={showConfirm ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                />
+                {errors.confirm && (
+                  <View style={styles.errorRow}>
+                    <Ionicons name="alert-circle-outline" size={13} color={colors.error} />
+                    <AppText style={styles.errorText}>{errors.confirm.message}</AppText>
+                  </View>
+                )}
               </View>
-
-              {error.length > 0 && (
-                <View style={styles.errorRow}>
-                  <Ionicons name="alert-circle-outline" size={13} color={colors.error} />
-                  <AppText variant="caption" style={styles.errorText}>{error}</AppText>
-                </View>
-              )}
             </Animated.View>
 
             <Button
               title="reset password"
-              onPress={handleReset}
+              onPress={handleSubmit(onSubmit)}
               variant="primary"
-              loading={isLoading}
+              loading={isSubmitting}
               style={styles.resetBtn}
             />
           </Animated.View>
@@ -247,23 +301,30 @@ function createStyles(c: Colors) {
       lineHeight: typography.sizes.sm * 1.6, paddingHorizontal: spacing.lg,
     },
     fieldGroup: { marginBottom: spacing.lg },
+    fieldLabel: {
+      color: c.textSecondary, fontSize: typography.sizes.sm,
+      fontWeight: typography.weights.medium, marginBottom: spacing.xs,
+    },
     inputWrapper: {
       flexDirection: 'row', alignItems: 'center',
       backgroundColor: c.surface, borderRadius: 14,
       borderWidth: 1.5, borderColor: c.border, paddingHorizontal: spacing.md, height: 52,
     },
-    inputWrapperError: { borderColor: c.error },
+    inputWrapperError: { borderColor: c.error, backgroundColor: `${c.error}06` },
+    inputWrapperFocused: { borderColor: c.accent, backgroundColor: `${c.accent}06` },
     inputIcon: { marginRight: spacing.sm },
-    input: { flex: 1, color: c.textPrimary, fontSize: typography.sizes.md },
+    input: { flex: 1, color: c.textPrimary, fontSize: typography.sizes.md, outlineWidth: 0 } as any,
     eyeBtn: { padding: spacing.xs },
-    errorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: spacing.md },
-    errorText: { color: c.error, fontSize: typography.sizes.xs },
+    // Strength bar
+    strengthRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
+    strengthBars: { flexDirection: 'row', gap: 4, flex: 1 },
+    strengthBar: { flex: 1, height: 4, borderRadius: 2 },
+    strengthLabel: { fontSize: typography.sizes.xs, fontWeight: typography.weights.medium, minWidth: 36 },
+    errorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.xs },
+    errorText: { color: c.error, fontSize: typography.sizes.sm, flex: 1 },
     resetBtn: { marginTop: spacing.sm },
     successBlock: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingTop: spacing.xxxxl,
+      flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: spacing.xxxxl,
     },
     successTitle: {
       color: c.textPrimary, fontWeight: typography.weights.bold,
