@@ -5,9 +5,13 @@ import { env } from "./config/env";
 import { logger } from "./utils/logger";
 import { embeddingQueue } from "./jobs/embeddingQueue";
 import { initSocket } from "./socket";
+import { verifySmtpConnection } from "./utils/mailer";
 
 async function main(): Promise<void> {
   await connectDatabase();
+
+  // Verify SMTP on startup — logs a warning if misconfigured, never blocks
+  verifySmtpConnection().catch(() => {});
 
   // Start background embedding worker
   embeddingQueue.startWorker();

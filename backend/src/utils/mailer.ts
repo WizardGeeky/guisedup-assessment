@@ -1,14 +1,21 @@
 import nodemailer from 'nodemailer';
+import SMTPTransport from 'nodemailer/lib/smtp-transport';
 
-const transporter = nodemailer.createTransport({
+const transportOptions: SMTPTransport.Options & { family?: number } = {
   host: 'smtp.gmail.com',
   port: 587,
   secure: false,
+  family: 4,
   auth: {
     user: process.env['SMTP_USER'],
     pass: process.env['SMTP_PASS'],
   },
-});
+  connectionTimeout: 8000,
+  greetingTimeout: 5000,
+  socketTimeout: 10000,
+};
+
+const transporter = nodemailer.createTransport(transportOptions);
 
 function buildOtpHtml(otp: string, username?: string): string {
   return `
@@ -43,21 +50,50 @@ function buildOtpHtml(otp: string, username?: string): string {
 </html>`;
 }
 
+export async function verifySmtpConnection(): Promise<void> {
+  const smtpUser = process.env['SMTP_USER'];
+  const smtpPass = process.env['SMTP_PASS'];
+  if (!smtpUser || !smtpPass) {
+    console.log('[MAILER] No SMTP credentials — OTP codes will be logged to console (dev mode)');
+    return;
+  }
+  try {
+    await transporter.verify();
+    console.log('[MAILER] Gmail SMTP connection verified ✓');
+  } catch (err) {
+    console.warn('[MAILER] Gmail SMTP unreachable (port 587 may be blocked by your network/firewall)');
+    console.warn('[MAILER] OTP codes will be logged to the backend console as fallback');
+  }
+}
+
 export async function sendOtpEmail(to: string, otp: string, username?: string): Promise<void> {
   const smtpUser = process.env['SMTP_USER'];
   const smtpPass = process.env['SMTP_PASS'];
 
   if (!smtpUser || !smtpPass) {
-    // Dev fallback: log to console instead of sending
-    console.log(`[DEV EMAIL] OTP for ${to}: ${otp}`);
+    logOtpToConsole(to, otp);
     return;
   }
 
-  await transporter.sendMail({
-    from: `"Guised Up" <${smtpUser}>`,
-    to,
-    subject: `${otp} is your Guised Up reset code`,
-    html: buildOtpHtml(otp, username),
-    text: `Your Guised Up password reset OTP is: ${otp}\nIt expires in 10 minutes.`,
-  });
+  try {
+    await transporter.sendMail({
+      from: `"Guised Up" <${smtpUser}>`,
+      to,
+      subject: `${otp} is your Guised Up reset code`,
+      html: buildOtpHtml(otp, username),
+      text: `Your Guised Up password reset OTP is: ${otp}\nIt expires in 10 minutes.`,
+    });
+    console.log(`[MAILER] OTP email sent to ${to}`);
+  } catch {
+    // SMTP blocked by network — fall back to console so the flow still works
+    console.warn('[MAILER] SMTP send failed — falling back to console');
+    logOtpToConsole(to, otp);
+  }
+}
+
+function logOtpToConsole(to: string, otp: string): void {
+  console.log('\n╔══════════════════════════════════════╗');
+  console.log(`║  OTP for ${to}`);
+  console.log(`║  Code: ${otp}`);
+  console.log('╚══════════════════════════════════════╝\n');
 }

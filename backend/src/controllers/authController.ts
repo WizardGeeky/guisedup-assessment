@@ -72,12 +72,10 @@ export const authController = {
         const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
         otpStore.set(email, { otp, username: user.username, expiresAt, attempts: 0 });
 
-        try {
-          await sendOtpEmail(email, otp, user.username);
-        } catch (mailErr) {
-          // Log but don't fail — dev console fallback already logs the OTP
+        // Fire-and-forget — never block the HTTP response on SMTP
+        sendOtpEmail(email, otp, user.username).catch((mailErr) => {
           console.error("[MAILER] Failed to send OTP email:", mailErr);
-        }
+        });
       }
 
       // Always respond with success to prevent email enumeration
