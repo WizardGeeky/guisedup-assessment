@@ -38,10 +38,10 @@ export const postController = {
   async updatePost(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params as { id: string };
-      const { text } = req.body as { text: string };
+      const { text, imageUrl } = req.body as { text: string; imageUrl?: string | null };
       const userId = req.user!.userId;
-      const post = await postService.updatePost(id, userId, text);
-      sendSuccess(res, post, "Post updated successfully");
+      const post = await postService.updatePost(id, userId, text, imageUrl);
+      sendSuccess(res, post, 200, undefined, "Post updated successfully");
     } catch (err) {
       next(err);
     }
@@ -52,7 +52,7 @@ export const postController = {
       const { id } = req.params as { id: string };
       const userId = req.user!.userId;
       await postService.deletePost(id, userId);
-      sendSuccess(res, null, "Post deleted successfully");
+      sendSuccess(res, null, 200, undefined, "Post deleted successfully");
     } catch (err) {
       next(err);
     }

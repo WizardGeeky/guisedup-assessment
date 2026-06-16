@@ -233,10 +233,10 @@ function createStyles(c: Colors) {
     },
     inputWrapper: {
       flexDirection: 'row', alignItems: 'center',
-      backgroundColor: c.surface, borderRadius: 14,
-      borderWidth: 1.5, borderColor: c.border, paddingHorizontal: spacing.md, height: 52,
+      backgroundColor: c.surface2, borderRadius: 14,
+      paddingHorizontal: spacing.md, height: 52,
     },
-    inputWrapperError: { borderColor: c.error, backgroundColor: `${c.error}06` },
+    inputWrapperError: { backgroundColor: `${c.error}12` },
     inputIcon: { marginRight: spacing.sm },
     input: { flex: 1, color: c.textPrimary, fontSize: typography.sizes.md, outlineWidth: 0 } as any,
     errorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.xs },

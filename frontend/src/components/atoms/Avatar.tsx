@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Image, StyleSheet } from 'react-native';
 import { typography } from '../../theme/typography';
 import { getAvatarColor } from '../../types';
 import AppText from './Text';
@@ -7,9 +7,10 @@ import AppText from './Text';
 interface AvatarProps {
   username: string;
   size?: number;
+  imageUrl?: string | null;
 }
 
-const Avatar: React.FC<AvatarProps> = ({ username, size = 40 }) => {
+const Avatar: React.FC<AvatarProps> = ({ username, size = 40, imageUrl }) => {
   const initial = username.charAt(0).toUpperCase();
   const bgColor = getAvatarColor(username);
 
@@ -20,17 +21,27 @@ const Avatar: React.FC<AvatarProps> = ({ username, size = 40 }) => {
     backgroundColor: bgColor,
   };
 
-  const textStyle = {
-    fontSize: size * 0.42,
-    fontWeight: typography.weights.bold,
-    color: '#FFFFFF',
-    lineHeight: size,
-    textAlign: 'center' as const,
-  };
+  if (imageUrl) {
+    return (
+      <Image
+        source={{ uri: imageUrl }}
+        style={[styles.container, containerStyle]}
+      />
+    );
+  }
 
   return (
     <View style={[styles.container, containerStyle]}>
-      <AppText variant="label" style={textStyle}>
+      <AppText
+        variant="label"
+        style={{
+          fontSize: size * 0.42,
+          fontWeight: typography.weights.bold,
+          color: '#FFFFFF',
+          lineHeight: size,
+          textAlign: 'center',
+        }}
+      >
         {initial}
       </AppText>
     </View>

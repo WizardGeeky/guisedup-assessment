@@ -49,10 +49,8 @@ function createStyles(c: Colors) {
     container: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: c.surface,
+      backgroundColor: c.surface2,
       borderRadius: 12,
-      borderWidth: 1,
-      borderColor: c.border,
       paddingHorizontal: spacing.md,
       height: 44,
     },

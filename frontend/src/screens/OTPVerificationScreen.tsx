@@ -264,9 +264,7 @@ function createStyles(c: Colors) {
       width: 46,
       height: 56,
       borderRadius: 12,
-      borderWidth: 1.5,
-      borderColor: c.border,
-      backgroundColor: c.surface,
+      backgroundColor: c.surface2,
       textAlign: 'center',
       fontSize: 22,
       fontWeight: typography.weights.bold,
@@ -274,8 +272,7 @@ function createStyles(c: Colors) {
       outlineWidth: 0,
     } as any,
     otpBoxFilled: {
-      borderColor: c.accent,
-      backgroundColor: c.surface2,
+      backgroundColor: `${c.accent}14`,
     },
     errorRow: {
       flexDirection: 'row', alignItems: 'center', gap: 4,

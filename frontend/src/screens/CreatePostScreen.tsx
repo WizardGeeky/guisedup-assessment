@@ -104,9 +104,17 @@ const CreatePostScreen: React.FC<CreatePostScreenProps> = ({ navigation }) => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      quality: 0.85,
+      quality: 0.6,
+      base64: true,
     });
-    if (!result.canceled && result.assets[0]) setImages([...images, result.assets[0].uri]);
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      // Convert to data URI so it can be stored in DB and displayed anywhere
+      const dataUri = asset.base64
+        ? `data:image/jpeg;base64,${asset.base64}`
+        : asset.uri;
+      setImages([...images, dataUri]);
+    }
   };
 
   const composeText = () => {
@@ -262,7 +270,7 @@ const CreatePostScreen: React.FC<CreatePostScreenProps> = ({ navigation }) => {
                 </View>
               )}
               {showTagInput && tags.length < 5 && (
-                <View style={[styles.tagInputRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+                <View style={[styles.tagInputRow, { backgroundColor: colors.surface2 }]}>
                   <AppText style={[styles.tagHash, { color: colors.accent }]}>#</AppText>
                   <TextInput
                     style={[styles.tagInput, webInputReset, { color: colors.textPrimary }]}
@@ -289,7 +297,7 @@ const CreatePostScreen: React.FC<CreatePostScreenProps> = ({ navigation }) => {
 
           {/* Link input */}
           {showLinkInput && (
-            <View style={[styles.linkRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+            <View style={[styles.linkRow, { backgroundColor: colors.surface2 }]}>
               <Ionicons name="link-outline" size={17} color={colors.textMuted} style={{ marginRight: spacing.sm }} />
               <TextInput
                 style={[styles.linkInput, webInputReset, { color: colors.textPrimary }]}
@@ -440,11 +448,11 @@ function createStyles(c: Colors) {
     tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
     tagChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: 8, borderWidth: 1 },
     tagChipText: { fontSize: typography.sizes.sm, fontWeight: typography.weights.semibold },
-    tagInputRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderRadius: 10, paddingHorizontal: spacing.md, height: 40 },
+    tagInputRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: spacing.md, height: 40 },
     tagHash: { fontSize: typography.sizes.md, fontWeight: typography.weights.bold, marginRight: 2 },
     tagInput: { flex: 1, fontSize: typography.sizes.md },
 
-    linkRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.sm, borderWidth: 1.5, borderRadius: 12, paddingHorizontal: spacing.md, height: 46 },
+    linkRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.sm, borderRadius: 12, paddingHorizontal: spacing.md, height: 46 },
     linkInput: { flex: 1, fontSize: typography.sizes.md },
 
     imagesRow: { marginTop: spacing.md },

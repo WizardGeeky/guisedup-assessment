@@ -44,6 +44,22 @@ export const userRepository = {
     }) as Promise<PublicUser | null>;
   },
 
+  async searchByUsername(query: string, excludeId: string, limit = 20): Promise<PublicUser[]> {
+    return prisma.user.findMany({
+      where: {
+        username: { contains: query, mode: "insensitive" },
+        NOT: { id: excludeId },
+      },
+      select: {
+        id: true, email: true, username: true,
+        avatarUrl: true, bio: true, createdAt: true, updatedAt: true,
+        passwordHash: false,
+      },
+      take: limit,
+      orderBy: { username: "asc" },
+    }) as Promise<PublicUser[]>;
+  },
+
   async update(id: string, data: Partial<Pick<User, "bio" | "avatarUrl">>): Promise<User> {
     return prisma.user.update({ where: { id }, data });
   },

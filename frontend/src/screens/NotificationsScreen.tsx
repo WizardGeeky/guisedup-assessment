@@ -1,67 +1,91 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { View, ScrollView, ActivityIndicator, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { View, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { TabParamList } from '../types';
+import { notificationApi, ApiNotification } from '../services/notificationApi';
 import { useColors, Colors } from '../context/ThemeContext';
+import { useSocket } from '../context/SocketContext';
 import { typography } from '../theme/typography';
 import { spacing } from '../theme/spacing';
-import { postApi } from '../services/postApi';
-import { interactionApi, InteractionCounts } from '../services/interactionApi';
-import { ApiPost } from '../services/feedApi';
 import { formatTimeAgo } from '../types';
 import Avatar from '../components/atoms/Avatar';
 import AppText from '../components/atoms/Text';
-import EmptyState from '../components/molecules/EmptyState';
 
 type NotifNavProp = BottomTabNavigationProp<TabParamList, 'Notifications'>;
-
-interface PostActivity {
-  post: ApiPost;
-  counts: InteractionCounts;
-}
-
 interface NotificationsScreenProps { navigation: NotifNavProp; }
+
+const NOTIF_ICONS: Record<string, string> = {
+  COMMENT: 'chatbubble',
+  REACTION: 'heart',
+  MENTION: 'at',
+  MESSAGE: 'mail',
+};
 
 const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ navigation }) => {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { socket } = useSocket();
 
-  const [activities, setActivities] = useState<PostActivity[]>([]);
+  const [notifications, setNotifications] = useState<ApiNotification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const posts = await postApi.getUserPosts();
-        const withCounts = await Promise.all(
-          posts.map(async (post) => {
-            try {
-              const counts = await interactionApi.getPostInteractions(post.id);
-              return { post, counts };
-            } catch {
-              return null;
-            }
-          }),
-        );
-        setActivities(withCounts.filter((a): a is PostActivity => a !== null));
-      } catch {
-        setActivities([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    void load();
+  const load = useCallback(async () => {
+    try {
+      const data = await notificationApi.getNotifications();
+      setNotifications(data);
+    } catch {
+      // silent
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      setIsLoading(true);
+      void load();
+      // Mark all as read after a short delay
+      const timer = setTimeout(() => { void notificationApi.markAllRead(); }, 1500);
+      return () => clearTimeout(timer);
+    }, [load]),
+  );
+
+  // Real-time notifications
+  useEffect(() => {
+    if (!socket) return;
+    const handler = (notif: ApiNotification) => {
+      setNotifications((prev) => [notif, ...prev]);
+    };
+    socket.on('new-notification', handler);
+    return () => { socket.off('new-notification', handler); };
+  }, [socket]);
 
   const Header = (
     <View style={styles.header}>
-      <TouchableOpacity onPress={() => navigation.navigate('Feed')} activeOpacity={0.7} style={styles.backBtn}>
+      <TouchableOpacity
+        style={styles.backBtn}
+        onPress={() => navigation.navigate('Feed')}
+        activeOpacity={0.7}
+      >
         <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
       </TouchableOpacity>
-      <AppText variant="h3" style={styles.screenTitle}>activity</AppText>
-      <View style={styles.backBtn} />
+      <AppText style={styles.title}>notifications</AppText>
+      {notifications.some((n) => !n.isRead) ? (
+        <TouchableOpacity
+          onPress={() => {
+            void notificationApi.markAllRead();
+            setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+          }}
+          activeOpacity={0.7}
+        >
+          <AppText style={[styles.markRead, { color: colors.accent }]}>mark all read</AppText>
+        </TouchableOpacity>
+      ) : (
+        <View style={{ width: 36 }} />
+      )}
     </View>
   );
 
@@ -69,24 +93,22 @@ const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ navigation })
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         {Header}
-        <View style={styles.loadingContainer}>
+        <View style={styles.center}>
           <ActivityIndicator color={colors.accent} />
         </View>
       </SafeAreaView>
     );
   }
 
-  const hasActivity = activities.some((a) => a.counts.totalCount > 0);
-
-  if (!hasActivity) {
+  if (notifications.length === 0) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         {Header}
-        <EmptyState
-          icon="🔔"
-          title="all quiet here"
-          subtitle="when people interact with your posts, you'll see it here"
-        />
+        <View style={styles.center}>
+          <Ionicons name="notifications-off-outline" size={48} color={colors.textMuted} />
+          <AppText style={styles.emptyTitle}>all quiet here</AppText>
+          <AppText style={styles.emptySub}>when people interact with your posts, you'll see it here</AppText>
+        </View>
       </SafeAreaView>
     );
   }
@@ -94,112 +116,71 @@ const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ navigation })
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {Header}
-      <ScrollView
+      <FlatList
+        data={notifications}
+        keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {activities
-          .filter((a) => a.counts.totalCount > 0)
-          .map(({ post, counts }) => (
-            <View key={post.id} style={styles.activityRow}>
-              <Avatar username={post.author.username} size={44} />
-              <View style={styles.activityContent}>
-                <AppText variant="body" style={styles.activityText} numberOfLines={2}>
-                  "{post.text}"
-                </AppText>
-                <View style={styles.countsRow}>
-                  {counts.reactionCount > 0 && (
-                    <AppText variant="caption" style={styles.countItem}>
-                      ❤️ {counts.reactionCount}
-                    </AppText>
-                  )}
-                  {counts.replyCount > 0 && (
-                    <AppText variant="caption" style={styles.countItem}>
-                      💬 {counts.replyCount}
-                    </AppText>
-                  )}
-                  {counts.viewCount > 0 && (
-                    <AppText variant="caption" style={styles.countItem}>
-                      👁 {counts.viewCount}
-                    </AppText>
-                  )}
+        renderItem={({ item }) => {
+          const iconName = NOTIF_ICONS[item.type] ?? 'notifications';
+          return (
+            <View style={[styles.row, !item.isRead && styles.rowUnread]}>
+              {item.fromUser ? (
+                <Avatar username={item.fromUser.username} size={44} />
+              ) : (
+                <View style={[styles.iconCircle, { backgroundColor: `${colors.accent}18` }]}>
+                  <Ionicons name={iconName as any} size={20} color={colors.accent} />
                 </View>
-                <AppText variant="caption" style={styles.activityTime}>
-                  {formatTimeAgo(post.createdAt)}
-                </AppText>
+              )}
+              <View style={styles.rowContent}>
+                <AppText style={styles.rowMessage}>{item.message}</AppText>
+                <AppText style={styles.rowTime}>{formatTimeAgo(item.createdAt)}</AppText>
               </View>
+              {!item.isRead && <View style={[styles.unreadDot, { backgroundColor: colors.accent }]} />}
             </View>
-          ))}
-      </ScrollView>
+          );
+        }}
+      />
     </SafeAreaView>
   );
 };
 
 function createStyles(c: Colors) {
   return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: c.background,
-    },
+    container: { flex: 1, backgroundColor: c.background },
     header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: spacing.lg,
-      paddingTop: spacing.sm,
-      paddingBottom: spacing.md,
-      borderBottomWidth: 1,
-      borderBottomColor: c.border,
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+      borderBottomWidth: 1, borderBottomColor: c.border,
     },
     backBtn: {
       width: 36, height: 36, borderRadius: 10,
       backgroundColor: c.surface2,
       alignItems: 'center', justifyContent: 'center',
     },
-    screenTitle: {
-      color: c.textPrimary,
-      fontWeight: typography.weights.bold,
+    title: {
+      fontSize: typography.sizes.xl, fontWeight: typography.weights.bold, color: c.textPrimary,
     },
-    scrollContent: {
-      paddingBottom: spacing.xxxxl,
+    markRead: { fontSize: typography.sizes.sm, fontWeight: typography.weights.medium },
+    center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, padding: spacing.xl },
+    emptyTitle: {
+      fontSize: typography.sizes.md, fontWeight: typography.weights.semibold,
+      color: c.textPrimary, marginTop: spacing.md,
     },
-    loadingContainer: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
+    emptySub: { fontSize: typography.sizes.sm, color: c.textMuted, textAlign: 'center' },
+    row: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+      paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+      borderBottomWidth: 1, borderBottomColor: c.border,
     },
-    activityRow: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.lg,
-      borderBottomWidth: 1,
-      borderBottomColor: c.border,
-      gap: spacing.md,
+    rowUnread: { backgroundColor: `${c.accent}08` },
+    iconCircle: {
+      width: 44, height: 44, borderRadius: 22,
+      alignItems: 'center', justifyContent: 'center',
     },
-    activityContent: {
-      flex: 1,
-    },
-    activityText: {
-      color: c.textPrimary,
-      fontSize: typography.sizes.sm,
-      lineHeight: typography.sizes.sm * 1.5,
-      fontStyle: 'italic',
-      marginBottom: spacing.xs,
-    },
-    countsRow: {
-      flexDirection: 'row',
-      gap: spacing.md,
-      marginBottom: 3,
-    },
-    countItem: {
-      color: c.textSecondary,
-      fontSize: typography.sizes.sm,
-    },
-    activityTime: {
-      color: c.textMuted,
-      fontSize: typography.sizes.xs,
-    },
+    rowContent: { flex: 1 },
+    rowMessage: { fontSize: typography.sizes.sm, color: c.textPrimary, marginBottom: 3 },
+    rowTime: { fontSize: typography.sizes.xs, color: c.textMuted },
+    unreadDot: { width: 8, height: 8, borderRadius: 4 },
   });
 }
 

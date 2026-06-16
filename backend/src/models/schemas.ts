@@ -34,7 +34,14 @@ export const createPostSchema = z.object({
       .string()
       .min(1, "Post text cannot be empty")
       .max(2000, "Post text is too long (max 2000 chars)"),
-    imageUrl: z.string().url("Invalid image URL").optional(),
+    // Accept http(s) URLs and base64 data URIs (data:image/...)
+    imageUrl: z
+      .string()
+      .refine(
+        (v) => v.startsWith("data:image/") || /^https?:\/\//.test(v),
+        "Must be a valid image URL or data URI",
+      )
+      .optional(),
   }),
 });
 
@@ -67,6 +74,32 @@ export const searchQuerySchema = z.object({
   query: z.object({
     q: z.string().min(1, "Query 'q' is required"),
     limit: z.coerce.number().min(1).max(50).optional(),
+  }),
+});
+
+export const createCommentSchema = z.object({
+  body: z.object({
+    text: z.string().min(1, "Comment cannot be empty").max(500, "Comment too long"),
+  }),
+});
+
+export const sendMessageSchema = z.object({
+  body: z.object({
+    toUserId: z.string().uuid("Invalid user ID"),
+    text: z.string().min(1, "Message cannot be empty").max(2000, "Message too long"),
+  }),
+});
+
+export const updateProfileSchema = z.object({
+  body: z.object({
+    bio: z.string().max(200, "Bio is too long (max 200 chars)").optional(),
+    avatarUrl: z
+      .string()
+      .refine(
+        (v) => v.startsWith("data:image/") || /^https?:\/\//.test(v),
+        "Must be a valid image URL or data URI",
+      )
+      .optional(),
   }),
 });
 

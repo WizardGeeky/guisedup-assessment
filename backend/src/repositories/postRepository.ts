@@ -103,7 +103,7 @@ export const postRepository = {
     }) as Promise<PostWithAuthor[]>;
   },
 
-  // Recent posts for cold-start (no relationships yet)
+  // All posts from other users, ordered by recency — used as the open candidate pool
   async findRecentPosts(
     excludeAuthorId: string,
     cursor?: string,
@@ -136,10 +136,13 @@ export const postRepository = {
     });
   },
 
-  async updatePost(id: string, authorId: string, text: string): Promise<PostWithAuthor | null> {
+  async updatePost(id: string, authorId: string, text: string, imageUrl?: string | null): Promise<PostWithAuthor | null> {
     const post = await prisma.post.findUnique({ where: { id } });
     if (!post || post.authorId !== authorId) return null;
-    await prisma.post.update({ where: { id }, data: { text } });
+    await prisma.post.update({
+      where: { id },
+      data: { text, ...(imageUrl !== undefined ? { imageUrl } : {}) },
+    });
     return this.findWithAuthor(id);
   },
 

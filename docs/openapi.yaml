@@ -1,0 +1,1705 @@
+openapi: 3.0.3
+
+info:
+  title: Guised Up API
+  version: 1.0.0
+  description: |
+    Real Connections Feed API — a social platform backend that ranks content by semantic
+    relevance, relationship strength, authenticity score, and time decay rather than
+    simple chronological order or raw engagement.
+
+    ## Authentication
+    Most endpoints require a JWT Bearer token obtained from `/api/auth/login` or
+    `/api/auth/register`. Pass it as `Authorization: Bearer <accessToken>`.
+
+    ## Rate Limiting
+    All `/api/` routes are rate-limited to **200 requests per 15 minutes** per IP.
+    Exceeding this returns HTTP 429.
+
+servers:
+  - url: http://localhost:3000
+    description: Development
+
+tags:
+  - name: auth
+    description: Registration, login, token refresh, password reset
+  - name: posts
+    description: Create and manage posts
+  - name: feed
+    description: Personalised ranked feed
+  - name: search
+    description: Full-text post search
+  - name: interactions
+    description: Views, reactions, and replies on posts
+  - name: comments
+    description: Threaded comments on posts
+  - name: notifications
+    description: In-app notification centre
+  - name: messages
+    description: Direct messaging between users
+  - name: users
+    description: User profiles and discovery
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Security
+# ─────────────────────────────────────────────────────────────────────────────
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token obtained from /api/auth/login or /api/auth/register
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Reusable schemas
+  # ───────────────────────────────────────────────────────────────────────────
+  schemas:
+
+    # ── Common wrappers ──────────────────────────────────────────────────────
+    SuccessEnvelope:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          example: true
+
+    ErrorEnvelope:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: "Something went wrong"
+
+    ValidationError:
+      allOf:
+        - $ref: "#/components/schemas/ErrorEnvelope"
+        - type: object
+          properties:
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                  message:
+                    type: string
+              example:
+                - field: email
+                  message: Invalid email address
+
+    # ── Auth ─────────────────────────────────────────────────────────────────
+    UserPublic:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        email:
+          type: string
+          format: email
+          example: "alice@example.com"
+        username:
+          type: string
+          example: "alice"
+        avatarUrl:
+          type: string
+          nullable: true
+          example: "https://cdn.example.com/avatars/alice.jpg"
+        bio:
+          type: string
+          nullable: true
+          example: "Building real connections."
+
+    AuthorRef:
+      type: object
+      description: Lightweight author reference embedded in posts and comments
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        username:
+          type: string
+          example: "alice"
+        avatarUrl:
+          type: string
+          nullable: true
+          example: "https://cdn.example.com/avatars/alice.jpg"
+
+    Tokens:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        refreshToken:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        expiresIn:
+          type: integer
+          description: Access token lifetime in seconds
+          example: 900
+
+    AuthResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                user:
+                  $ref: "#/components/schemas/UserPublic"
+                tokens:
+                  $ref: "#/components/schemas/Tokens"
+
+    # ── Posts ────────────────────────────────────────────────────────────────
+    Post:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "p1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        authorId:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        text:
+          type: string
+          example: "Just had a genuine conversation with a stranger on the bus. Highly recommend."
+        imageUrl:
+          type: string
+          nullable: true
+          example: "https://cdn.example.com/posts/img123.jpg"
+        authenticityScore:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: ML-derived authenticity score for this post
+          example: 0.87
+        viewCount:
+          type: integer
+          example: 142
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-06-15T09:30:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-06-15T09:30:00.000Z"
+        author:
+          $ref: "#/components/schemas/AuthorRef"
+        _count:
+          type: object
+          properties:
+            interactions:
+              type: integer
+              example: 23
+
+    PostsListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Post"
+
+    PostSingleResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Post"
+
+    CreatePostBody:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          example: "Just had a genuine conversation with a stranger on the bus."
+        imageUrl:
+          type: string
+          nullable: true
+          example: "https://cdn.example.com/posts/img123.jpg"
+
+    UpdatePostBody:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          example: "Updated post text."
+        imageUrl:
+          type: string
+          nullable: true
+          description: Pass null to remove the image
+          example: null
+
+    # ── Feed ─────────────────────────────────────────────────────────────────
+    FeedScores:
+      type: object
+      description: Component scores that produced the final ranking score
+      properties:
+        semantic:
+          type: number
+          format: float
+          example: 0.72
+        relationship:
+          type: number
+          format: float
+          example: 0.55
+        authenticity:
+          type: number
+          format: float
+          example: 0.87
+        timeDecay:
+          type: number
+          format: float
+          example: 0.94
+        final:
+          type: number
+          format: float
+          example: 0.78
+
+    FeedItem:
+      type: object
+      properties:
+        post:
+          $ref: "#/components/schemas/Post"
+        scores:
+          $ref: "#/components/schemas/FeedScores"
+
+    FeedMeta:
+      type: object
+      properties:
+        hasMore:
+          type: boolean
+          example: true
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque cursor — pass as `cursor` query param in the next request
+          example: "2026-06-15T09:30:00.000Z_p1b2c3d4"
+
+    FeedResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/FeedItem"
+            meta:
+              $ref: "#/components/schemas/FeedMeta"
+
+    # ── Search ───────────────────────────────────────────────────────────────
+    SearchResultItem:
+      type: object
+      properties:
+        post:
+          $ref: "#/components/schemas/Post"
+        relevanceScore:
+          type: number
+          format: float
+          example: 0.91
+
+    SearchResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/SearchResultItem"
+
+    # ── Interactions ─────────────────────────────────────────────────────────
+    InteractionType:
+      type: string
+      enum: [VIEW, REPLY, REACTION]
+      example: REACTION
+
+    Interaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "i1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        postId:
+          type: string
+          format: uuid
+          example: "p1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        userId:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        type:
+          $ref: "#/components/schemas/InteractionType"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-06-15T10:00:00.000Z"
+
+    CreateInteractionBody:
+      type: object
+      required: [postId, type]
+      properties:
+        postId:
+          type: string
+          format: uuid
+          example: "p1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        type:
+          $ref: "#/components/schemas/InteractionType"
+
+    # ── Comments ─────────────────────────────────────────────────────────────
+    Comment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "c1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        postId:
+          type: string
+          format: uuid
+          example: "p1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        authorId:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        text:
+          type: string
+          example: "This really resonated with me!"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-06-15T10:05:00.000Z"
+        author:
+          $ref: "#/components/schemas/AuthorRef"
+
+    CommentsListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Comment"
+
+    CreateCommentBody:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          example: "This really resonated with me!"
+
+    # ── Notifications ────────────────────────────────────────────────────────
+    NotificationType:
+      type: string
+      enum: [REACTION, COMMENT, FOLLOW, MENTION, SYSTEM]
+      example: COMMENT
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "n1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        userId:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        type:
+          $ref: "#/components/schemas/NotificationType"
+        message:
+          type: string
+          example: "bob commented on your post."
+        isRead:
+          type: boolean
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-06-15T10:10:00.000Z"
+        fromUser:
+          $ref: "#/components/schemas/AuthorRef"
+
+    NotificationsListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Notification"
+
+    UnreadCountResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                count:
+                  type: integer
+                  example: 5
+
+    MarkReadBody:
+      type: object
+      properties:
+        notificationIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: IDs to mark as read. Omit or pass empty array to mark ALL as read.
+          example:
+            - "n1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+    # ── Messages ─────────────────────────────────────────────────────────────
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "m1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        fromUserId:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        toUserId:
+          type: string
+          format: uuid
+          example: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+        text:
+          type: string
+          example: "Hey, great post today!"
+        isRead:
+          type: boolean
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-06-15T11:00:00.000Z"
+
+    Conversation:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+          example: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+        username:
+          type: string
+          example: "bob"
+        avatarUrl:
+          type: string
+          nullable: true
+          example: "https://cdn.example.com/avatars/bob.jpg"
+        lastMessage:
+          type: string
+          example: "See you tomorrow!"
+        lastMessageAt:
+          type: string
+          format: date-time
+          example: "2026-06-15T11:05:00.000Z"
+        unreadCount:
+          type: integer
+          example: 2
+
+    ConversationsListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Conversation"
+
+    MessagesListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Message"
+
+    SendMessageBody:
+      type: object
+      required: [toUserId, text]
+      properties:
+        toUserId:
+          type: string
+          format: uuid
+          example: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+        text:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          example: "Hey, great post today!"
+
+    # ── Users ────────────────────────────────────────────────────────────────
+    UpdateProfileBody:
+      type: object
+      properties:
+        bio:
+          type: string
+          nullable: true
+          maxLength: 500
+          example: "Building real connections."
+        avatarUrl:
+          type: string
+          nullable: true
+          example: "https://cdn.example.com/avatars/alice-new.jpg"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Reusable responses
+  # ───────────────────────────────────────────────────────────────────────────
+  responses:
+    Unauthorized:
+      description: Missing or invalid Bearer token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            success: false
+            error: "Unauthorized"
+
+    Forbidden:
+      description: Authenticated but not allowed to perform this action
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            success: false
+            error: "Forbidden"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            success: false
+            error: "Not found"
+
+    UnprocessableEntity:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationError"
+
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            success: false
+            error: "Too many requests, please try again later"
+
+    InternalServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            success: false
+            error: "Internal server error"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Reusable parameters
+  # ───────────────────────────────────────────────────────────────────────────
+  parameters:
+    PostIdPath:
+      name: id
+      in: path
+      required: true
+      description: Post UUID
+      schema:
+        type: string
+        format: uuid
+      example: "p1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+    PostIdInComments:
+      name: postId
+      in: path
+      required: true
+      description: Post UUID (parent of comments)
+      schema:
+        type: string
+        format: uuid
+      example: "p1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+    CommentIdPath:
+      name: id
+      in: path
+      required: true
+      description: Comment UUID
+      schema:
+        type: string
+        format: uuid
+      example: "c1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+    UserIdPath:
+      name: userId
+      in: path
+      required: true
+      description: User UUID
+      schema:
+        type: string
+        format: uuid
+      example: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paths
+# ─────────────────────────────────────────────────────────────────────────────
+paths:
+
+  # ── Auth ───────────────────────────────────────────────────────────────────
+  /api/auth/register:
+    post:
+      tags: [auth]
+      operationId: authRegister
+      summary: Register a new user
+      description: Creates a new account and returns tokens so the client can start making authenticated requests immediately.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, username, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "alice@example.com"
+                username:
+                  type: string
+                  minLength: 3
+                  maxLength: 30
+                  example: "alice"
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                  example: "S3cureP@ss!"
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Bad request (missing fields)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/auth/login:
+    post:
+      tags: [auth]
+      operationId: authLogin
+      summary: Log in with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "alice@example.com"
+                password:
+                  type: string
+                  format: password
+                  example: "S3cureP@ss!"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Missing credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              example:
+                success: false
+                error: "Invalid email or password"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/auth/refresh:
+    post:
+      tags: [auth]
+      operationId: authRefresh
+      summary: Refresh access token
+      description: Exchange a valid refresh token for a new access token + refresh token pair.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+                  example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      responses:
+        "200":
+          description: New tokens issued
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Tokens"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/auth/logout:
+    post:
+      tags: [auth]
+      operationId: authLogout
+      summary: Invalidate the current refresh token
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+                  example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      responses:
+        "200":
+          description: Logged out successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/auth/me:
+    get:
+      tags: [auth]
+      operationId: authMe
+      summary: Get the authenticated user's profile
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UserPublic"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/auth/forgot-password:
+    post:
+      tags: [auth]
+      operationId: authForgotPassword
+      summary: Request a password reset OTP
+      description: Sends a one-time passcode to the user's registered email address.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "alice@example.com"
+      responses:
+        "200":
+          description: OTP sent (response is the same whether email exists or not, to prevent enumeration)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/auth/verify-otp:
+    post:
+      tags: [auth]
+      operationId: authVerifyOtp
+      summary: Verify a password reset OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, otp]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "alice@example.com"
+                otp:
+                  type: string
+                  minLength: 6
+                  maxLength: 6
+                  example: "847291"
+      responses:
+        "200":
+          description: OTP valid — proceed to reset password
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          resetToken:
+                            type: string
+                            description: Short-lived token to authorise the reset-password call
+                            example: "rt_abc123..."
+        "400":
+          description: Invalid or expired OTP
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/auth/reset-password:
+    post:
+      tags: [auth]
+      operationId: authResetPassword
+      summary: Set a new password after OTP verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resetToken, newPassword]
+              properties:
+                resetToken:
+                  type: string
+                  description: Token returned by /verify-otp
+                  example: "rt_abc123..."
+                newPassword:
+                  type: string
+                  format: password
+                  minLength: 8
+                  example: "NewP@ss99!"
+      responses:
+        "200":
+          description: Password updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+        "400":
+          description: Invalid or expired reset token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ── Posts ──────────────────────────────────────────────────────────────────
+  /api/posts:
+    post:
+      tags: [posts]
+      operationId: createPost
+      summary: Create a new post
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePostBody"
+      responses:
+        "201":
+          description: Post created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostSingleResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/posts/user/me:
+    get:
+      tags: [posts]
+      operationId: getMyPosts
+      summary: List all posts by the authenticated user
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: User's posts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostsListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/posts/{id}:
+    get:
+      tags: [posts]
+      operationId: getPostById
+      summary: Get a single post by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PostIdPath"
+      responses:
+        "200":
+          description: Post found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostSingleResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    put:
+      tags: [posts]
+      operationId: updatePost
+      summary: Update a post (owner only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PostIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePostBody"
+      responses:
+        "200":
+          description: Post updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostSingleResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    delete:
+      tags: [posts]
+      operationId: deletePost
+      summary: Delete a post (owner only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PostIdPath"
+      responses:
+        "200":
+          description: Post deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ── Feed ───────────────────────────────────────────────────────────────────
+  /api/feed:
+    get:
+      tags: [feed]
+      operationId: getFeed
+      summary: Get the personalised ranked feed
+      description: |
+        Returns posts ranked by a composite score: `semantic × relationship × authenticity × timeDecay`.
+        Uses cursor-based pagination — pass `nextCursor` from the previous response as the `cursor` param.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          description: Opaque pagination cursor from the previous response's `meta.nextCursor`
+          schema:
+            type: string
+          example: "2026-06-15T09:30:00.000Z_p1b2c3d4"
+        - name: limit
+          in: query
+          required: false
+          description: Number of items to return (default 20, max 50)
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 50
+          example: 20
+      responses:
+        "200":
+          description: Feed page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ── Search ─────────────────────────────────────────────────────────────────
+  /api/search:
+    get:
+      tags: [search]
+      operationId: searchPosts
+      summary: Full-text search across posts
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query string
+          schema:
+            type: string
+            minLength: 1
+          example: "genuine conversation"
+        - name: limit
+          in: query
+          required: false
+          description: Maximum results to return (default 10, max 50)
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 50
+          example: 10
+      responses:
+        "200":
+          description: Search results ordered by relevance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "400":
+          description: Missing or empty `q` parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ── Interactions ───────────────────────────────────────────────────────────
+  /api/interactions:
+    post:
+      tags: [interactions]
+      operationId: createInteraction
+      summary: Record an interaction on a post
+      description: |
+        Idempotent — recording the same `(userId, postId, type)` tuple twice is safe; the
+        second call is a no-op and still returns 200.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInteractionBody"
+      responses:
+        "200":
+          description: Interaction recorded
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Interaction"
+        "400":
+          description: Invalid postId or type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/interactions/post/{postId}:
+    get:
+      tags: [interactions]
+      operationId: getInteractionsByPost
+      summary: Get all interactions for a post
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PostIdInComments"
+      responses:
+        "200":
+          description: List of interactions
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Interaction"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ── Comments ───────────────────────────────────────────────────────────────
+  /api/posts/{postId}/comments:
+    get:
+      tags: [comments]
+      operationId: getComments
+      summary: List comments on a post
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PostIdInComments"
+      responses:
+        "200":
+          description: Comments list (chronological)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommentsListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    post:
+      tags: [comments]
+      operationId: createComment
+      summary: Add a comment to a post
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PostIdInComments"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCommentBody"
+      responses:
+        "201":
+          description: Comment created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Comment"
+        "400":
+          description: Missing text
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/posts/{postId}/comments/{id}:
+    delete:
+      tags: [comments]
+      operationId: deleteComment
+      summary: Delete a comment (owner or post-owner only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PostIdInComments"
+        - $ref: "#/components/parameters/CommentIdPath"
+      responses:
+        "200":
+          description: Comment deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ── Notifications ──────────────────────────────────────────────────────────
+  /api/notifications:
+    get:
+      tags: [notifications]
+      operationId: getNotifications
+      summary: List notifications for the current user
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          example: 20
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+          example: 0
+      responses:
+        "200":
+          description: Notifications list (newest first)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationsListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/notifications/unread-count:
+    get:
+      tags: [notifications]
+      operationId: getUnreadNotificationCount
+      summary: Get the count of unread notifications
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Unread notification count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnreadCountResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/notifications/mark-read:
+    post:
+      tags: [notifications]
+      operationId: markNotificationsRead
+      summary: Mark notifications as read
+      description: Pass specific IDs to mark only those notifications, or omit the array to mark all unread notifications.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarkReadBody"
+      responses:
+        "200":
+          description: Notifications marked as read
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          updatedCount:
+                            type: integer
+                            example: 3
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ── Messages ───────────────────────────────────────────────────────────────
+  /api/messages/conversations:
+    get:
+      tags: [messages]
+      operationId: getConversations
+      summary: List all conversations for the current user
+      description: Returns one entry per conversation partner, sorted by most recent message.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Conversations list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationsListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/messages/conversations/{userId}:
+    get:
+      tags: [messages]
+      operationId: getConversationMessages
+      summary: Get the message history with a specific user
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/UserIdPath"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+          example: 50
+        - name: before
+          in: query
+          required: false
+          description: Cursor — return messages before this message ID (for pagination)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Messages (newest first)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessagesListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/messages:
+    post:
+      tags: [messages]
+      operationId: sendMessage
+      summary: Send a direct message to another user
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageBody"
+      responses:
+        "201":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Message"
+        "400":
+          description: Missing or invalid fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Recipient user not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ── Users ──────────────────────────────────────────────────────────────────
+  /api/users/search:
+    get:
+      tags: [users]
+      operationId: searchUsers
+      summary: Search for users by username or display name
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Username prefix or display name fragment to search for
+          schema:
+            type: string
+            minLength: 1
+          example: "ali"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 50
+          example: 10
+      responses:
+        "200":
+          description: Matching users
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/UserPublic"
+        "400":
+          description: Missing `q` parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/users/profile/me:
+    get:
+      tags: [users]
+      operationId: getMyProfile
+      summary: Get the authenticated user's full profile
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Profile data
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UserPublic"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/users/profile:
+    put:
+      tags: [users]
+      operationId: updateMyProfile
+      summary: Update the authenticated user's profile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileBody"
+      responses:
+        "200":
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UserPublic"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"

@@ -64,7 +64,19 @@ export type TabParamList = {
   Create: undefined;
   Notifications: undefined;
   MyPosts: undefined;
+  Chat: undefined;
   Profile: undefined;
+  Settings: undefined;
+};
+
+export type SettingsStackParamList = {
+  SettingsRoot: undefined;
+  EditProfile: undefined;
+};
+
+export type ChatStackParamList = {
+  ChatList: undefined;
+  ChatRoom: { userId: string; username: string };
 };
 
 export type ProfileStackParamList = {

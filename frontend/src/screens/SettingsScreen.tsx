@@ -4,15 +4,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { ProfileStackParamList } from '../types';
+import { SettingsStackParamList } from '../types';
 import { useColors, Colors } from '../context/ThemeContext';
 import { useTheme } from '../context/ThemeContext';
 import { typography } from '../theme/typography';
 import { spacing } from '../theme/spacing';
 import { useAuth } from '../context/AuthContext';
+import Avatar from '../components/atoms/Avatar';
 import AppText from '../components/atoms/Text';
 
-type SettingsNav = NativeStackNavigationProp<ProfileStackParamList, 'Settings'>;
+type SettingsNav = NativeStackNavigationProp<SettingsStackParamList, 'SettingsRoot'>;
 
 interface RowProps {
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -75,7 +76,11 @@ const SettingsScreen: React.FC = () => {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+        <TouchableOpacity
+          onPress={() => navigation.getParent()?.navigate('Feed')}
+          style={styles.backBtn}
+          activeOpacity={0.7}
+        >
           <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <AppText variant="h3" style={styles.title}>settings</AppText>
@@ -83,6 +88,26 @@ const SettingsScreen: React.FC = () => {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+
+        {/* ── Profile Card ── */}
+        <TouchableOpacity
+          style={[styles.profileCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          onPress={() => navigation.navigate('EditProfile')}
+          activeOpacity={0.85}
+        >
+          <Avatar username={user.username} size={64} imageUrl={user.avatarUrl} />
+          <View style={styles.profileInfo}>
+            <AppText style={styles.profileName}>{user.username}</AppText>
+            <AppText style={styles.profileEmail}>{user.email}</AppText>
+            {user.bio ? (
+              <AppText style={styles.profileBio} numberOfLines={1}>{user.bio}</AppText>
+            ) : null}
+          </View>
+          <View style={[styles.editChip, { backgroundColor: `${colors.accent}14` }]}>
+            <AppText style={[styles.editChipText, { color: colors.accent }]}>edit</AppText>
+            <Ionicons name="chevron-forward" size={13} color={colors.accent} />
+          </View>
+        </TouchableOpacity>
 
         {/* Account */}
         <View style={styles.section}>
@@ -161,13 +186,7 @@ const SettingsScreen: React.FC = () => {
         {/* Logout */}
         <View style={styles.section}>
           <View style={styles.card}>
-            <SettingRow
-              icon="log-out-outline"
-              label="log out"
-              isDestructive
-              onPress={() => void logout()}
-              colors={colors}
-            />
+            <SettingRow icon="log-out-outline" label="log out" isDestructive onPress={() => void logout()} colors={colors} />
           </View>
         </View>
 
@@ -201,13 +220,33 @@ function createStyles(c: Colors) {
       borderBottomWidth: 1, borderBottomColor: c.border,
     },
     backBtn: {
-      width: 38, height: 38, borderRadius: 19, backgroundColor: c.surface2,
+      width: 38, height: 38, borderRadius: 12, backgroundColor: c.surface2,
       alignItems: 'center', justifyContent: 'center',
     },
     title: { color: c.textPrimary, fontWeight: typography.weights.bold },
     placeholder: { width: 38 },
     scrollContent: { paddingBottom: spacing.xxxxl },
-    section: { marginTop: spacing.xl, paddingHorizontal: spacing.lg },
+
+    // Profile card
+    profileCard: {
+      flexDirection: 'row', alignItems: 'center',
+      margin: spacing.lg, borderRadius: 18,
+      padding: spacing.lg, borderWidth: 1,
+      shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+    },
+    profileInfo: { flex: 1, marginLeft: spacing.md },
+    profileName: { fontSize: typography.sizes.md, fontWeight: typography.weights.bold, color: c.textPrimary },
+    profileEmail: { fontSize: typography.sizes.xs, color: c.textMuted, marginTop: 2 },
+    profileBio: { fontSize: typography.sizes.xs, color: c.textSecondary, marginTop: 4, fontStyle: 'italic' },
+    editChip: {
+      flexDirection: 'row', alignItems: 'center', gap: 2,
+      paddingHorizontal: spacing.sm, paddingVertical: spacing.xs,
+      borderRadius: 10,
+    },
+    editChipText: { fontSize: typography.sizes.xs, fontWeight: typography.weights.semibold },
+
+    section: { marginTop: spacing.lg, paddingHorizontal: spacing.lg },
     sectionTitle: {
       color: c.textMuted, fontSize: typography.sizes.xs, fontWeight: typography.weights.semibold,
       textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: spacing.sm,
@@ -221,7 +260,6 @@ function createStyles(c: Colors) {
       width: 30, height: 30, borderRadius: 8,
       alignItems: 'center', justifyContent: 'center', marginRight: spacing.md,
     },
-    // Theme picker inline
     themePickerRow: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
@@ -229,16 +267,12 @@ function createStyles(c: Colors) {
     themeRowLeft: { flexDirection: 'row', alignItems: 'center' },
     themePickerLabel: { color: c.textPrimary, fontSize: typography.sizes.md },
     themeToggle: {
-      flexDirection: 'row',
-      backgroundColor: c.surface2,
-      borderRadius: 10,
-      padding: 3,
-      gap: 2,
+      flexDirection: 'row', backgroundColor: c.surface2,
+      borderRadius: 10, padding: 3, gap: 2,
     },
     themeOption: {
       flexDirection: 'row', alignItems: 'center', gap: 4,
-      paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
-      borderRadius: 8,
+      paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 8,
     },
     themeOptionActive: { backgroundColor: c.accent },
     themeOptionText: { color: c.textMuted, fontSize: typography.sizes.xs },

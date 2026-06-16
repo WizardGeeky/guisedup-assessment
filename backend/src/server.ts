@@ -1,8 +1,10 @@
+import { createServer } from "http";
 import { createApp } from "./app";
 import { connectDatabase, disconnectDatabase } from "./config/database";
 import { env } from "./config/env";
 import { logger } from "./utils/logger";
 import { embeddingQueue } from "./jobs/embeddingQueue";
+import { initSocket } from "./socket";
 
 async function main(): Promise<void> {
   await connectDatabase();
@@ -11,8 +13,10 @@ async function main(): Promise<void> {
   embeddingQueue.startWorker();
 
   const app = createApp();
+  const server = createServer(app);
+  initSocket(server);
 
-  const server = app.listen(env.PORT, () => {
+  server.listen(env.PORT, () => {
     logger.info(`Server running on http://localhost:${env.PORT} [${env.NODE_ENV}]`);
   });
 

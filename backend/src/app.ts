@@ -3,10 +3,12 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
+import swaggerUi from "swagger-ui-express";
 import { env } from "./config/env";
 import { logger } from "./utils/logger";
 import { globalErrorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { router } from "./routes";
+import { swaggerSpec, swaggerUiOptions } from "./config/swagger";
 
 export function createApp(): express.Application {
   const app = express();
@@ -49,6 +51,10 @@ export function createApp(): express.Application {
   app.get("/health", (_req, res) => {
     res.json({ success: true, data: { status: "ok", timestamp: new Date().toISOString() } });
   });
+
+  // Swagger UI — interactive API documentation
+  app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+  app.get("/api/docs.json", (_req, res) => { res.json(swaggerSpec); });
 
   // API routes
   app.use("/api", router);

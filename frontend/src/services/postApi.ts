@@ -27,8 +27,8 @@ export const postApi = {
     return res.data.data;
   },
 
-  async updatePost(id: string, text: string): Promise<ApiPost> {
-    const res = await apiClient.put<ApiSuccess<ApiPost>>(`/posts/${id}`, { text });
+  async updatePost(id: string, text: string, imageUrl?: string | null): Promise<ApiPost> {
+    const res = await apiClient.put<ApiSuccess<ApiPost>>(`/posts/${id}`, { text, imageUrl });
     return res.data.data;
   },
 

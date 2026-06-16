@@ -17,25 +17,15 @@ const CANDIDATE_MULTIPLIER = 3; // Fetch 3× more candidates than page size for 
 
 export const feedService = {
   async getFeed(viewerUserId: string, cursor?: string, limit = DEFAULT_PAGE_SIZE): Promise<FeedPage> {
-    // Step 1: Identify candidate authors (people the viewer interacts with)
-    const interactedAuthorIds = await interactionRepository.getInteractedAuthorIds(viewerUserId);
-
-    // Step 2: Fetch candidate posts
-    // If viewer has no interactions yet (cold start), fall back to recent posts
+    // Step 1: Fetch candidate posts from ALL users
+    // The ranking engine boosts posts from closer relationships; candidate selection
+    // must be open to everyone so users can discover new people.
     const candidateLimit = limit * CANDIDATE_MULTIPLIER;
-    let candidates: PostWithAuthor[];
-
-    if (interactedAuthorIds.length > 0) {
-      candidates = await postRepository.findFeedCandidates(
-        viewerUserId,
-        interactedAuthorIds,
-        cursor,
-        candidateLimit,
-      );
-    } else {
-      // Cold start: show recent posts from everyone
-      candidates = await postRepository.findRecentPosts(viewerUserId, cursor, candidateLimit);
-    }
+    const candidates: PostWithAuthor[] = await postRepository.findRecentPosts(
+      viewerUserId,
+      cursor,
+      candidateLimit,
+    );
 
     if (candidates.length === 0) {
       return { posts: [], nextCursor: null, hasMore: false };

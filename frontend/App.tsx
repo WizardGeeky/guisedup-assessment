@@ -8,6 +8,7 @@ import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthProvider } from './src/context/AuthContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { SocketProvider } from './src/context/SocketContext';
 import RootNavigator from './src/navigation/RootNavigator';
 import { lightColors, darkColors } from './src/theme/colors';
 
@@ -80,7 +81,9 @@ export default function App() {
         <WebFrame>
           <ThemeProvider>
             <AuthProvider>
-              <AppContent />
+              <SocketProvider>
+                <AppContent />
+              </SocketProvider>
             </AuthProvider>
           </ThemeProvider>
         </WebFrame>

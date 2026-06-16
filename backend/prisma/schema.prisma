@@ -20,6 +20,11 @@ model User {
   posts         Post[]
   interactions  Interaction[]
   refreshTokens RefreshToken[]
+  comments      Comment[]
+  sentMessages      Message[] @relation("SentMessages")
+  receivedMessages  Message[] @relation("ReceivedMessages")
+  notifications     Notification[] @relation("NotificationRecipient")
+  sentNotifications Notification[] @relation("NotificationSender")
 
   // Relationships — as source (follower) and target (following)
   relationshipsAsSource UserRelationship[] @relation("SourceRelationships")
@@ -46,6 +51,7 @@ model Post {
   author       User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
   interactions Interaction[]
   embeddingJob EmbeddingJob?
+  comments     Comment[]
 
   @@index([authorId])
   @@index([createdAt(sort: Desc)])
@@ -124,6 +130,62 @@ model EmbeddingJob {
   @@index([status])
   @@index([createdAt])
   @@map("embedding_jobs")
+}
+
+model Comment {
+  id        String   @id @default(uuid()) @db.Uuid
+  postId    String   @map("post_id") @db.Uuid
+  authorId  String   @map("author_id") @db.Uuid
+  text      String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt(sort: Desc)])
+  @@map("comments")
+}
+
+model Notification {
+  id         String           @id @default(uuid()) @db.Uuid
+  userId     String           @map("user_id") @db.Uuid
+  fromUserId String?          @map("from_user_id") @db.Uuid
+  type       NotificationType
+  postId     String?          @map("post_id") @db.Uuid
+  commentId  String?          @map("comment_id") @db.Uuid
+  message    String
+  isRead     Boolean          @default(false) @map("is_read")
+  createdAt  DateTime         @default(now()) @map("created_at")
+
+  user     User  @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  fromUser User? @relation("NotificationSender", fields: [fromUserId], references: [id], onDelete: SetNull)
+
+  @@index([userId, isRead, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+model Message {
+  id         String   @id @default(uuid()) @db.Uuid
+  fromUserId String   @map("from_user_id") @db.Uuid
+  toUserId   String   @map("to_user_id") @db.Uuid
+  text       String   @db.Text
+  isRead     Boolean  @default(false) @map("is_read")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  fromUser User @relation("SentMessages", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User @relation("ReceivedMessages", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@index([fromUserId, toUserId, createdAt(sort: Desc)])
+  @@index([toUserId, isRead])
+  @@map("messages")
+}
+
+enum NotificationType {
+  COMMENT
+  REACTION
+  MENTION
+  MESSAGE
 }
 
 enum InteractionType {

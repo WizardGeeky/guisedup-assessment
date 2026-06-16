@@ -12,41 +12,56 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { TabParamList } from '../types';
 import { feedApi, RankedPost } from '../services/feedApi';
+import { notificationApi } from '../services/notificationApi';
 import { useColors, Colors } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import PostList from '../components/organisms/PostList';
 import SearchBar from '../components/molecules/SearchBar';
+import Avatar from '../components/atoms/Avatar';
 import AppText from '../components/atoms/Text';
 
 type FeedNavProp = BottomTabNavigationProp<TabParamList, 'Feed'>;
 interface FeedScreenProps { navigation: FeedNavProp; }
 
-const FILTERS = ['for you', 'following', 'trending', 'recent'];
-
-const TRENDING_TOPICS = [
-  { tag: '#authentic', icon: 'heart-outline', posts: '2.4k posts' },
-  { tag: '#realmoments', icon: 'camera-outline', posts: '1.8k posts' },
-  { tag: '#unfiltered', icon: 'aperture-outline', posts: '3.1k posts' },
-  { tag: '#reallife', icon: 'sunny-outline', posts: '980 posts' },
-  { tag: '#connect', icon: 'people-outline', posts: '1.2k posts' },
-  { tag: '#honest', icon: 'chatbubble-outline', posts: '760 posts' },
-];
+const FILTERS = ['for you', 'trending', 'recent'] as const;
+type FilterKey = typeof FILTERS[number];
 
 const FeedScreen: React.FC<FeedScreenProps> = ({ navigation }) => {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { user } = useAuth();
+  const { socket } = useSocket();
 
   const [posts, setPosts] = useState<RankedPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [activeFilter, setActiveFilter] = useState(0);
+  const [hasUnread, setHasUnread] = useState(false);
+
   const cursorRef = useRef<string | undefined>(undefined);
   const loadingMoreRef = useRef(false);
   const hasLoadedRef = useRef(false);
+
+  // Sort posts client-side based on active filter
+  const displayedPosts = useMemo<RankedPost[]>(() => {
+    if (activeFilter === 1) {
+      // trending: sort by reaction count
+      return [...posts].sort(
+        (a, b) => (b.post._count?.interactions ?? 0) - (a.post._count?.interactions ?? 0)
+      );
+    }
+    if (activeFilter === 2) {
+      // recent: sort by date
+      return [...posts].sort(
+        (a, b) => new Date(b.post.createdAt).getTime() - new Date(a.post.createdAt).getTime()
+      );
+    }
+    return posts; // for you: ranked order from API
+  }, [posts, activeFilter]);
 
   const fetchFeed = useCallback(async (refresh: boolean) => {
     const cursor = refresh ? undefined : cursorRef.current;
@@ -69,8 +84,28 @@ const FeedScreen: React.FC<FeedScreenProps> = ({ navigation }) => {
         setIsRefreshing(true);
         void fetchFeed(true).finally(() => setIsRefreshing(false));
       }
+
+      // Fetch real unread notification count
+      void notificationApi.getUnreadCount().then((count) => setHasUnread(count > 0)).catch(() => {});
+
+      // Poll every 30s
+      const poll = setInterval(() => {
+        if (loadingMoreRef.current) return;
+        cursorRef.current = undefined;
+        void fetchFeed(true);
+      }, 30_000);
+
+      return () => clearInterval(poll);
     }, [fetchFeed])
   );
+
+  // Real-time: mark bell as unread when new notification arrives
+  useEffect(() => {
+    if (!socket) return;
+    const handler = () => setHasUnread(true);
+    socket.on('new-notification', handler);
+    return () => { socket.off('new-notification', handler); };
+  }, [socket]);
 
   const handleLoadMore = useCallback(() => {
     if (loadingMoreRef.current || !hasMore) return;
@@ -86,13 +121,13 @@ const FeedScreen: React.FC<FeedScreenProps> = ({ navigation }) => {
   }, [fetchFeed]);
 
   const handleSearchPress = useCallback(() => navigation.navigate('Search'), [navigation]);
-  const handleNotificationsPress = useCallback(() => navigation.navigate('Notifications'), [navigation]);
+  const handleNotificationsPress = useCallback(() => {
+    setHasUnread(false);
+    navigation.navigate('Notifications');
+  }, [navigation]);
   const handleCreatePress = useCallback(() => navigation.navigate('Create'), [navigation]);
 
-  const isEmpty = !isLoading && posts.length === 0;
-
-  const initials = user?.username ? user.username[0].toUpperCase() : 'G';
-  const displayName = user?.username ? `@${user.username}` : 'guised up';
+  const isEmpty = !isLoading && displayedPosts.length === 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -100,18 +135,20 @@ const FeedScreen: React.FC<FeedScreenProps> = ({ navigation }) => {
       {/* ── Header ── */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <View style={styles.avatarCircle}>
-            <AppText style={styles.avatarLetter}>{initials}</AppText>
-          </View>
+          <TouchableOpacity onPress={() => navigation.navigate('Settings')} activeOpacity={0.8}>
+            <Avatar username={user?.username ?? ''} size={42} imageUrl={user?.avatarUrl} />
+          </TouchableOpacity>
           <View>
             <AppText style={styles.headerGreeting}>welcome back</AppText>
-            <AppText style={styles.headerUsername}>{displayName}</AppText>
+            <AppText style={styles.headerUsername}>@{user?.username ?? 'you'}</AppText>
           </View>
         </View>
-        <TouchableOpacity style={styles.notifBtn} onPress={handleNotificationsPress} activeOpacity={0.7}>
-          <Ionicons name="notifications-outline" size={21} color={colors.textPrimary} />
-          <View style={styles.notifDot} />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity style={styles.notifBtn} onPress={handleNotificationsPress} activeOpacity={0.7}>
+            <Ionicons name="notifications-outline" size={21} color={colors.textPrimary} />
+            {hasUnread && <View style={styles.notifDot} />}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* ── Search ── */}
@@ -121,25 +158,22 @@ const FeedScreen: React.FC<FeedScreenProps> = ({ navigation }) => {
       </View>
 
       {/* ── Filter Chips ── */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterRow}
-        contentContainerStyle={styles.filterContent}
-      >
-        {FILTERS.map((label, i) => (
+      <View style={styles.filterRow}>
+        {FILTERS.map((label: FilterKey, i) => (
           <TouchableOpacity
             key={label}
-            style={[styles.chip, activeFilter === i && styles.chipActive]}
+            style={[styles.chip, activeFilter === i && { backgroundColor: colors.accent, borderColor: colors.accent }]}
             onPress={() => setActiveFilter(i)}
             activeOpacity={0.7}
           >
+            {i === 1 && <Ionicons name="flame-outline" size={13} color={activeFilter === i ? '#FFF' : colors.textMuted} style={{ marginRight: 4 }} />}
+            {i === 2 && <Ionicons name="time-outline" size={13} color={activeFilter === i ? '#FFF' : colors.textMuted} style={{ marginRight: 4 }} />}
             <AppText style={[styles.chipText, activeFilter === i && styles.chipTextActive]}>
               {label}
             </AppText>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </View>
 
       <View style={styles.divider} />
 
@@ -150,27 +184,11 @@ const FeedScreen: React.FC<FeedScreenProps> = ({ navigation }) => {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Trending topics section */}
-          <View style={styles.sectionHeader}>
-            <Ionicons name="trending-up-outline" size={16} color={colors.accent} />
-            <AppText style={styles.sectionTitle}>trending topics</AppText>
-            <View style={[styles.comingSoonBadge, { backgroundColor: `${colors.accent}14` }]}>
-              <AppText style={[styles.comingSoonText, { color: colors.accent }]}>coming soon</AppText>
-            </View>
-          </View>
-
-          <View style={styles.topicsGrid}>
-            {TRENDING_TOPICS.map((t, i) => (
-              <TrendingCard key={t.tag} topic={t} index={i} colors={colors} styles={styles} />
-            ))}
-          </View>
-
-          {/* CTA */}
           <EmptyCTA onPress={handleCreatePress} colors={colors} styles={styles} />
         </ScrollView>
       ) : (
         <PostList
-          posts={posts}
+          posts={displayedPosts}
           onLoadMore={handleLoadMore}
           onRefresh={handleRefresh}
           isLoading={isLoading}
@@ -179,36 +197,6 @@ const FeedScreen: React.FC<FeedScreenProps> = ({ navigation }) => {
         />
       )}
     </SafeAreaView>
-  );
-};
-
-/* ── Trending topic card ── */
-const TrendingCard: React.FC<{
-  topic: { tag: string; icon: string; posts: string };
-  index: number;
-  colors: Colors;
-  styles: ReturnType<typeof createStyles>;
-}> = ({ topic, index, colors, styles }) => {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(16)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 400, delay: index * 80, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 400, delay: index * 80, useNativeDriver: true }),
-    ]).start();
-  }, [fadeAnim, slideAnim, index]);
-
-  return (
-    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }], width: '48%' }}>
-      <View style={[styles.topicCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={[styles.topicIconWrap, { backgroundColor: `${colors.accent}12` }]}>
-          <Ionicons name={topic.icon as any} size={18} color={colors.accent} />
-        </View>
-        <AppText style={[styles.topicTag, { color: colors.textPrimary }]}>{topic.tag}</AppText>
-        <AppText style={[styles.topicPosts, { color: colors.textMuted }]}>{topic.posts}</AppText>
-      </View>
-    </Animated.View>
   );
 };
 
@@ -223,8 +211,8 @@ const EmptyCTA: React.FC<{
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(bounceAnim, { toValue: -5, duration: 800, useNativeDriver: true }),
-        Animated.timing(bounceAnim, { toValue: 0, duration: 800, useNativeDriver: true }),
+        Animated.timing(bounceAnim, { toValue: -6, duration: 900, useNativeDriver: true }),
+        Animated.timing(bounceAnim, { toValue: 0, duration: 900, useNativeDriver: true }),
       ])
     ).start();
   }, [bounceAnim]);
@@ -232,11 +220,9 @@ const EmptyCTA: React.FC<{
   return (
     <View style={[styles.ctaCard, { backgroundColor: colors.surface, borderColor: `${colors.accent}22` }]}>
       <Animated.View style={{ transform: [{ translateY: bounceAnim }] }}>
-        <Ionicons name="pencil-outline" size={32} color={colors.accent} />
+        <Ionicons name="pencil-outline" size={36} color={colors.accent} />
       </Animated.View>
-      <AppText style={[styles.ctaTitle, { color: colors.textPrimary }]}>
-        be the first to post
-      </AppText>
+      <AppText style={[styles.ctaTitle, { color: colors.textPrimary }]}>be the first to post</AppText>
       <AppText style={[styles.ctaSub, { color: colors.textMuted }]}>
         real moments, real people.{'\n'}start the conversation today.
       </AppText>
@@ -261,20 +247,13 @@ function createStyles(c: Colors) {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.md,
     },
-    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    avatarCircle: {
-      width: 40, height: 40, borderRadius: 12, backgroundColor: c.accent,
-      alignItems: 'center', justifyContent: 'center',
-      shadowColor: c.accent, shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.35, shadowRadius: 8, elevation: 5,
-    },
-    avatarLetter: { fontSize: 18, fontWeight: typography.weights.bold, color: '#FFF', lineHeight: 22 },
+    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     headerGreeting: { fontSize: typography.sizes.xs, color: c.textMuted },
     headerUsername: { fontSize: typography.sizes.md, fontWeight: typography.weights.bold, color: c.textPrimary },
     notifBtn: {
       width: 40, height: 40, borderRadius: 12,
-      backgroundColor: c.surface2,
-      alignItems: 'center', justifyContent: 'center',
+      backgroundColor: c.surface2, alignItems: 'center', justifyContent: 'center',
     },
     notifDot: {
       position: 'absolute', top: 9, right: 9,
@@ -286,15 +265,17 @@ function createStyles(c: Colors) {
     searchWrapper: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, position: 'relative' },
     searchOverlay: { position: 'absolute', top: 0, left: spacing.lg, right: spacing.lg, bottom: spacing.sm },
 
-    // Filter chips
-    filterRow: { flexGrow: 0 },
-    filterContent: { paddingHorizontal: spacing.lg, gap: spacing.sm, paddingBottom: spacing.md },
+    // Filter chips — horizontal pill row
+    filterRow: {
+      flexDirection: 'row', alignItems: 'center',
+      paddingHorizontal: spacing.lg, gap: spacing.sm, paddingBottom: spacing.md,
+    },
     chip: {
-      paddingHorizontal: spacing.md, paddingVertical: 7,
-      borderRadius: 20, backgroundColor: c.surface,
+      flexDirection: 'row', alignItems: 'center',
+      paddingHorizontal: spacing.md, paddingVertical: 8,
+      borderRadius: 22, backgroundColor: c.surface,
       borderWidth: 1.5, borderColor: c.border,
     },
-    chipActive: { backgroundColor: c.accent, borderColor: c.accent },
     chipText: { fontSize: typography.sizes.sm, fontWeight: typography.weights.medium, color: c.textSecondary },
     chipTextActive: { color: '#FFF', fontWeight: typography.weights.semibold },
 
@@ -302,36 +283,6 @@ function createStyles(c: Colors) {
 
     scroll: { flex: 1 },
     scrollContent: { padding: spacing.lg, paddingBottom: spacing.xxxxl },
-
-    // Section header
-    sectionHeader: {
-      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
-      marginBottom: spacing.md,
-    },
-    sectionTitle: {
-      fontSize: typography.sizes.sm, fontWeight: typography.weights.semibold,
-      color: c.textPrimary, flex: 1,
-    },
-    comingSoonBadge: {
-      paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
-    },
-    comingSoonText: { fontSize: typography.sizes.xs, fontWeight: typography.weights.semibold },
-
-    // Topic grid
-    topicsGrid: {
-      flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm,
-      marginBottom: spacing.xl,
-    },
-    topicCard: {
-      borderRadius: 14, borderWidth: 1, padding: spacing.md,
-    },
-    topicIconWrap: {
-      width: 36, height: 36, borderRadius: 10,
-      alignItems: 'center', justifyContent: 'center',
-      marginBottom: spacing.sm,
-    },
-    topicTag: { fontSize: typography.sizes.sm, fontWeight: typography.weights.semibold, marginBottom: 3 },
-    topicPosts: { fontSize: typography.sizes.xs },
 
     // CTA card
     ctaCard: {
@@ -346,7 +297,7 @@ function createStyles(c: Colors) {
     },
     ctaSub: {
       fontSize: typography.sizes.sm, textAlign: 'center',
-      lineHeight: typography.sizes.sm * 1.7, marginBottom: spacing.lg,
+      lineHeight: (typography.sizes.sm ?? 14) * 1.7, marginBottom: spacing.lg,
     },
     ctaBtn: {
       flexDirection: 'row', alignItems: 'center', gap: spacing.sm,

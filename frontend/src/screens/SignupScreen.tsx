@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Animated,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -107,6 +108,11 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={styles.blobTL} />
       <View style={styles.blobBR} />
+      <SafeAreaView edges={['top']} style={styles.topBar}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+        </TouchableOpacity>
+      </SafeAreaView>
 
       <ScrollView
         contentContainerStyle={styles.container}
@@ -273,6 +279,11 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
 function createStyles(c: Colors) {
   return StyleSheet.create({
     flex: { flex: 1, backgroundColor: c.background },
+    topBar: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
+    backBtn: {
+      width: 38, height: 38, borderRadius: 12, backgroundColor: c.surface2,
+      alignItems: 'center', justifyContent: 'center',
+    },
     blobTL: {
       position: 'absolute', width: 200, height: 200, borderRadius: 100,
       backgroundColor: c.accent, opacity: 0.07, top: -70, left: -60,
@@ -307,11 +318,11 @@ function createStyles(c: Colors) {
     fieldGroup: { marginBottom: spacing.md },
     label: { color: c.textSecondary, fontSize: typography.sizes.sm, marginBottom: spacing.xs },
     inputWrapper: {
-      flexDirection: 'row', alignItems: 'center', backgroundColor: c.background,
-      borderRadius: 12, borderWidth: 1.5, borderColor: c.border, paddingHorizontal: spacing.md, height: 50,
+      flexDirection: 'row', alignItems: 'center', backgroundColor: c.surface2,
+      borderRadius: 12, paddingHorizontal: spacing.md, height: 50,
     },
-    inputWrapperError: { borderColor: c.error, backgroundColor: `${c.error}06` },
-    inputWrapperFocused: { borderColor: c.accent, backgroundColor: `${c.accent}06` },
+    inputWrapperError: { backgroundColor: `${c.error}12` },
+    inputWrapperFocused: { backgroundColor: `${c.accent}10` },
     inputIcon: { marginRight: spacing.sm },
     input: { flex: 1, color: c.textPrimary, fontSize: typography.sizes.md, outlineWidth: 0 } as any,
     eyeBtn: { padding: spacing.xs },

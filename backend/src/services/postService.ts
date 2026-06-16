@@ -46,8 +46,8 @@ export const postService = {
     return postRepository.findByAuthor(userId);
   },
 
-  async updatePost(postId: string, userId: string, text: string): Promise<PostWithAuthor> {
-    const post = await postRepository.updatePost(postId, userId, text);
+  async updatePost(postId: string, userId: string, text: string, imageUrl?: string | null): Promise<PostWithAuthor> {
+    const post = await postRepository.updatePost(postId, userId, text, imageUrl);
     if (!post) throw new NotFoundError("Post");
     return post;
   },

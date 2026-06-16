@@ -21,6 +21,7 @@ interface AuthContextValue extends AuthState {
   register: (email: string, username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  updateUserProfile: (patch: Partial<Pick<AuthUser, 'avatarUrl' | 'bio'>>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -114,6 +115,21 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
     }
   }, []);
 
+  const updateUserProfile = useCallback(
+    async (patch: Partial<Pick<AuthUser, 'avatarUrl' | 'bio'>>): Promise<void> => {
+      try {
+        const current = await tokenStorage.getUser();
+        if (!current) return;
+        const updated: AuthUser = { ...current, ...patch };
+        await tokenStorage.setUser(updated);
+        setState((prev) => ({ ...prev, user: updated }));
+      } catch {
+        // Ignore
+      }
+    },
+    [],
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -122,6 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
         register,
         logout,
         refreshUser,
+        updateUserProfile,
       }}
     >
       {children}
