@@ -75,7 +75,22 @@ const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({ navigatio
   };
 
   const handleChange = (text: string, index: number) => {
-    const digit = text.replace(/\D/g, '').slice(-1);
+    const digits = text.replace(/\D/g, '');
+
+    if (digits.length > 1) {
+      // Paste — distribute all digits across boxes starting from current index
+      const newOtp = [...otp];
+      for (let i = 0; i < digits.length && index + i < OTP_LENGTH; i++) {
+        newOtp[index + i] = digits[i];
+      }
+      setOtp(newOtp);
+      setError('');
+      const nextFocus = Math.min(index + digits.length, OTP_LENGTH - 1);
+      inputRefs.current[nextFocus]?.focus();
+      return;
+    }
+
+    const digit = digits.slice(-1);
     const newOtp = [...otp];
     newOtp[index] = digit;
     setOtp(newOtp);
@@ -177,7 +192,7 @@ const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({ navigatio
                 onChangeText={(t) => handleChange(t, i)}
                 onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, i)}
                 keyboardType="number-pad"
-                maxLength={1}
+                maxLength={OTP_LENGTH}
                 selectTextOnFocus
                 caretHidden
               />

@@ -33,7 +33,7 @@ const resetSchema = z
   .object({
     password: z
       .string()
-      .min(6, 'at least 6 characters required')
+      .min(8, 'password must be at least 8 characters')
       .max(128, 'password is too long'),
     confirm: z.string().min(1, 'please confirm your password'),
   })
@@ -46,8 +46,8 @@ type ResetForm = z.infer<typeof resetSchema>;
 // Password strength: 0–4
 function getStrength(pwd: string): number {
   let score = 0;
-  if (pwd.length >= 6) score++;
-  if (pwd.length >= 10) score++;
+  if (pwd.length >= 8) score++;
+  if (pwd.length >= 12) score++;
   if (/[A-Z]/.test(pwd)) score++;
   if (/[0-9]/.test(pwd)) score++;
   if (/[^A-Za-z0-9]/.test(pwd)) score++;

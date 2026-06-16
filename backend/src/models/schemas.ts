@@ -119,6 +119,6 @@ export const verifyOtpSchema = z.object({
 export const resetPasswordSchema = z.object({
   body: z.object({
     token: z.string().uuid("Invalid reset token"),
-    newPassword: z.string().min(6, "Password must be at least 6 characters").max(128),
+    newPassword: z.string().min(8, "Password must be at least 8 characters").max(128),
   }),
 });

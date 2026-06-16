@@ -41,7 +41,7 @@ const signupSchema = z.object({
   password: z
     .string()
     .min(1, 'password is required')
-    .min(6, 'at least 6 characters'),
+    .min(8, 'password must be at least 8 characters'),
 });
 type SignupForm = z.infer<typeof signupSchema>;
 
@@ -87,7 +87,7 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
     ]).start();
   };
 
-  const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm<SignupForm>({
+  const { control, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<SignupForm>({
     resolver: zodResolver(signupSchema),
     defaultValues: { username: '', email: '', password: '' },
     mode: 'onTouched',
@@ -99,7 +99,14 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
       await register(data.email, data.username, data.password);
     } catch (err) {
       const msg = getApiError(err);
-      setApiError(msg);
+      const lower = msg.toLowerCase();
+      if (lower.includes('email') && lower.includes('already')) {
+        setError('email', { message: 'this email is already registered — try logging in instead' });
+      } else if (lower.includes('username') && lower.includes('already')) {
+        setError('username', { message: 'this username is taken — choose a different one' });
+      } else {
+        setApiError(msg);
+      }
       shake();
     }
   };
@@ -225,7 +232,7 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
                     onChangeText={onChange}
                     onFocus={() => setFocusedField('password')}
                     onBlur={() => { setFocusedField(null); onBlur(); }}
-                    placeholder="at least 6 characters"
+                    placeholder="at least 8 characters"
                     placeholderTextColor={colors.textMuted}
                     secureTextEntry={!showPassword}
                     returnKeyType="done"
