@@ -1,12 +1,12 @@
 # 🎭 Guised Up — Real Connections Feed
 
-[![CI](https://img.shields.io/github/actions/workflow/status/eswar/guisedup-assessment/ci.yml?branch=main&label=CI&logo=github-actions&logoColor=white)](https://github.com/eswar/guisedup-assessment)
-[![Node.js](https://img.shields.io/badge/Node.js-20.x-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![React Native](https://img.shields.io/badge/React%20Native-Expo%2056-0EA5E9?logo=react&logoColor=white)](https://expo.dev/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?logo=prisma&logoColor=white)](https://www.prisma.io/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Node.js](https://img.shields.io/badge/Node.js-20.x-339933?logo=node.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
+![React Native](https://img.shields.io/badge/React%20Native-Expo%2056-0EA5E9?logo=react&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?logo=postgresql&logoColor=white)
+![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?logo=prisma&logoColor=white)
+![Swagger](https://img.shields.io/badge/Swagger-UI%20%2F%20api%2Fdocs-85EA2D?logo=swagger&logoColor=black)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 > *"Authentic connections aren't random — they're ranked."*
 >
@@ -235,7 +235,7 @@ npm run dev
 ```
 
 **API base:** `http://localhost:3000`
-**Swagger UI:** `http://localhost:3000/api/docs`
+**Swagger UI:** `http://localhost:3000/api/docs/`
 **OpenAPI JSON:** `http://localhost:3000/api/docs.json`
 
 ---
@@ -275,11 +275,18 @@ npx expo start --web       # Browser preview
 
 ## 📖 API Documentation
 
-| Resource | URL |
+> **Swagger UI** is served directly by the backend — start the server then open:
+>
+> ### 👉 http://localhost:3000/api/docs/
+>
+> You can try every endpoint interactively: click **Authorize**, paste your JWT, then execute requests and inspect live responses — no Postman needed.
+
+| Resource | URL / Path |
 |---|---|
-| **Swagger UI (interactive)** | `http://localhost:3000/api/docs` |
-| **OpenAPI JSON** | `http://localhost:3000/api/docs.json` |
-| **OpenAPI YAML (static)** | `docs/openapi.yaml` |
+| **Swagger UI (interactive)** | `http://localhost:3000/api/docs/` |
+| **OpenAPI JSON (raw spec)** | `http://localhost:3000/api/docs.json` |
+| **OpenAPI YAML (static file)** | [`docs/openapi.yaml`](docs/openapi.yaml) |
+| **API Spec document** | [`docs/API_SPEC.md`](docs/API_SPEC.md) |
 
 ### Endpoint Quick Reference
 
@@ -370,6 +377,7 @@ All queries live in [`sql/queries.sql`](sql/queries.sql).
 
 | Document | Description |
 |---|---|
+| [`docs/ARCHITECTURE.png`](docs/ARCHITECTURE.png) | Full system architecture diagram (1100×780 PNG) |
 | [`docs/TSD.md`](docs/TSD.md) | Technical Solution Document — end-to-end design rationale and decisions |
 | [`docs/HLD.md`](docs/HLD.md) | High Level Design — component topology, data flow, deployment topology |
 | [`docs/LLD.md`](docs/LLD.md) | Low Level Design — service contracts, class diagrams, sequence flows |
