@@ -559,3 +559,113 @@ This project was built using **Claude Code (claude-sonnet-4-6)** as the primary 
 5. **Post aging curve**: Different decay rates for different content types (text vs image)
 6. **Privacy controls**: "Connection depth" preference — let users choose how much relationship signals matter to them
 7. **Spam detection job**: Run D4 query on a cron every hour, auto-flag accounts for review
+
+---
+
+## 18. Full Implementation Scope
+
+This section documents the complete feature set delivered beyond the core four assessment endpoints.
+
+### 18.1 Backend — Extended Features
+
+| Feature | Endpoints | Description |
+|---------|-----------|-------------|
+| Password Reset Flow | POST /auth/forgot-password, /verify-otp, /reset-password | Email OTP → 6-digit code stored in DB → reset token issued on verify → password update |
+| Real-time Messaging | GET+POST /api/messages, GET /conversations | Socket.io rooms per user (`user:${userId}`), unread count tracking, read receipts |
+| Comment System | GET+POST+DELETE /api/posts/:postId/comments | Comments per post with author info, soft-deletable by owner |
+| Notification System | GET /api/notifications, /unread-count, /mark-read | Types: COMMENT, REACTION, MENTION, MESSAGE — delivered via Socket.io `notification` event |
+| User Profile Management | GET+PUT /api/users/profile | Update bio + avatarUrl (base64 data URI or HTTPS URL) |
+| User Search | GET /api/users/search?q= | Fuzzy username search for @mention autocomplete and new chat initiation |
+| Post Image Update | PUT /api/posts/:id `{ text, imageUrl? }` | imageUrl can be updated or set to null to remove post image |
+| Swagger API Docs | GET /api/docs, /api/docs.json | Interactive Swagger UI + raw JSON spec |
+
+### 18.2 Frontend — All Screens
+
+| Screen | Stack | Key Features |
+|--------|-------|-------------|
+| LoginScreen | Auth | Animated stagger, shake on error, eye toggle for password |
+| SignupScreen | Auth | Zod validation, back button, animated entrance |
+| ForgotPasswordScreen | Auth | Email input, OTP request flow |
+| OTPVerificationScreen | Auth | 6-box OTP input, auto-advance, resend |
+| ResetPasswordScreen | Auth | New password + confirm, strength indicator |
+| FeedScreen | Tab | Ranked feed, filter chips (For You/Trending/Recent), search bar with semantic results, infinite scroll, PostCard with authenticity pill |
+| CreatePostScreen | Tab | Heading field, body with @mention autocomplete, hashtag chips, link input, image picker (base64 data URI) |
+| MyPostsScreen | Tab | User's posts with full CRUD; card shows heading/body/@mentions/image/tags/link; edit modal has same full toolkit as CreatePost |
+| ChatListScreen | Chat Stack | Conversation previews, unread badges, user search to start new chat |
+| ChatRoomScreen | Chat Stack | Real-time Socket.io messaging, message bubbles, read state |
+| SettingsScreen | Settings Stack | Theme toggle (light/dark), notification toggle, profile card, logout |
+| EditProfileScreen | Settings Stack | Avatar photo picker (expo-image-picker, base64), bio field, PUT /api/users/profile |
+| ProfileScreen | Profile Stack | Avatar with camera badge, bio display, navigate to EditProfile |
+| NotificationsScreen | Hidden Tab | Grouped notifications with type icons |
+| SearchScreen | Hidden Tab | Global post search with vector semantic results |
+
+### 18.3 Real-time Architecture (Socket.io)
+
+```
+Client App                     Socket.io Server
+    │                               │
+    │──── connect (auth.token) ────►│  JWT validated on handshake
+    │                               │  User joins room: user:${userId}
+    │                               │
+    │──── join-post (postId) ──────►│  User joins post:${postId} room
+    │◄─── new-message (msg) ────────│  Sent to recipient's user room
+    │◄─── notification (notif) ─────│  Sent to target user's room
+    │                               │
+    │──── leave-post (postId) ─────►│  User leaves post room
+    │──── disconnect ──────────────►│  Clean up
+```
+
+**Room Strategy:**
+- `user:${userId}` — private notifications and direct messages
+- `post:${postId}` — future: real-time comment feeds
+
+**Socket Events Catalog:**
+
+| Event | Direction | Payload | Trigger |
+|-------|-----------|---------|---------|
+| `join-post` | Client → Server | `{ postId }` | User opens a post |
+| `leave-post` | Client → Server | `{ postId }` | User closes a post |
+| `new-message` | Server → Client | `Message` | Another user sends a DM |
+| `notification` | Server → Client | `Notification` | COMMENT / REACTION / MENTION / MESSAGE |
+
+---
+
+## 19. API Documentation
+
+The full API is documented in two formats:
+
+| Format | Location | Description |
+|--------|----------|-------------|
+| Interactive Swagger UI | `http://localhost:3000/api/docs` | Browser-based API explorer with try-it-out |
+| OpenAPI 3.0.3 YAML | `docs/openapi.yaml` | Machine-readable spec for code generation |
+| Raw JSON spec | `http://localhost:3000/api/docs.json` | Programmatic access to spec |
+| Human-readable spec | `docs/API_SPEC.md` | Narrative API documentation with examples |
+
+### Swagger Implementation
+
+```typescript
+// backend/src/config/swagger.ts — defines the complete OpenAPI 3.0.3 spec
+// backend/src/app.ts — serves at /api/docs via swagger-ui-express
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+app.get("/api/docs.json", (_req, res) => { res.json(swaggerSpec); });
+```
+
+---
+
+## 20. Documentation Suite
+
+This project includes a comprehensive documentation suite:
+
+| Document | Description |
+|----------|-------------|
+| `docs/TSD.md` | This document — Technical Solution Document |
+| `docs/HLD.md` | High Level Design — system components, data flows, tech choices |
+| `docs/LLD.md` | Low Level Design — class diagrams, sequence diagrams, code-level detail |
+| `docs/DATABASE_DESIGN.md` | Schema, ER diagram, indexes, normalization decisions |
+| `docs/API_SPEC.md` | Complete human-readable API specification with examples |
+| `docs/FEED_RANKING.md` | Feed ranking algorithm deep-dive with formulas and examples |
+| `docs/AI_USAGE.md` | AI tool usage log — what was delegated, what was not |
+| `docs/DEPLOYMENT.md` | Local, Docker, and production deployment guide |
+| `docs/openapi.yaml` | OpenAPI 3.0.3 machine-readable spec |
+| `docs/ARCHITECTURE.png` | System architecture diagram |
+| `sql/queries.sql` | D1–D4 SQL challenge queries + bonus ranking query |

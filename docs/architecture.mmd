@@ -1,0 +1,44 @@
+flowchart TB
+    subgraph CLIENT["CLIENT · React Native + Expo 56"]
+        A1["📱 Screens\nFeed · CreatePost · MyPosts · Chat · Settings"]
+        A2["🔌 Socket.io Client\nReal-time Messaging & Notifications"]
+        A3["🧠 Context\nAuthContext · SocketContext · ThemeContext"]
+        A4["🌐 API Services\naxios · JWT interceptors · token refresh"]
+    end
+
+    subgraph GATEWAY["API GATEWAY"]
+        B1["🔒 Helmet.js · CORS · Rate Limiter 200/15min"]
+    end
+
+    subgraph SERVER["EXPRESS API SERVER · Node.js 20 · TypeScript"]
+        C1["🔐 Auth Routes\nJWT · OTP · Refresh Rotation"]
+        C2["📝 Post Routes\nCRUD · imageUrl · authenticityScore"]
+        C3["📰 Feed Route\nRanking Engine · Cursor Pagination"]
+        C4["🔍 Search Route\nVector Cosine Similarity"]
+        C5["💬 Comment · Interaction · Notification · Message Routes"]
+        C6["📊 FeedRankingEngine\n0.35 Semantic + 0.30 Relationship\n0.20 Authenticity + 0.15 TimeDecay"]
+        C7["🧠 EmbeddingPipeline\nDB-backed queue · 5s poll · 3 retries\nMock Hash → sentence-transformers prod"]
+        C8["📖 Swagger UI\n/api/docs · openapi.yaml"]
+    end
+
+    subgraph REALTIME["REAL-TIME · Socket.io"]
+        D1["🏠 User Rooms  user:{userId}"]
+        D2["📨 Events\nnew-message · notification"]
+    end
+
+    subgraph DATABASE["DATA LAYER · PostgreSQL 15"]
+        E1["👤 User · RefreshToken\n🔑 Auth + Profile"]
+        E2["📝 Post · EmbeddingJob\n📰 Content + Embeddings"]
+        E3["❤️ Interaction · UserRelationship\n📊 Signals for Ranking"]
+        E4["💬 Comment · Notification · Message\n🔔 Social Features"]
+        E5["🔢 pgvector\nHNSW index · 384-dim\nCosine Distance ANN"]
+    end
+
+    CLIENT -->|"HTTPS Bearer JWT"| GATEWAY
+    CLIENT <-->|"WebSocket / Polling"| REALTIME
+    GATEWAY --> SERVER
+    SERVER -->|"Prisma ORM"| DATABASE
+    SERVER <--> REALTIME
+    C7 -->|"store embedding"| E5
+    C3 --> C6
+    C4 -->|"vector search"| E5
