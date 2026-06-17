@@ -5,7 +5,8 @@
   "main": "dist/server.js",
   "type": "commonjs",
   "scripts": {
-    "dev": "nodemon --watch src --ext ts --exec ts-node src/server.ts",
+    "predev": "npx kill-port 3000 --silent",
+    "dev": "nodemon",
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "jest --runInBand --forceExit",

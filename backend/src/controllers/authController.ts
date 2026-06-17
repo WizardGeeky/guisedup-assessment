@@ -2,13 +2,12 @@ import { Request, Response, NextFunction } from "express";
 import { randomUUID } from "crypto";
 import { authService } from "../services/authService";
 import { userRepository } from "../repositories/userRepository";
+import { otpRepository } from "../repositories/otpRepository";
 import { sendOtpEmail } from "../utils/mailer";
 import { sendSuccess, sendCreated } from "../utils/apiResponse";
 import { UnauthorizedError } from "../utils/errors";
 
-// In-memory OTP store (keyed by email)
-const otpStore = new Map<string, { otp: string; username: string; expiresAt: number; attempts: number }>();
-// In-memory reset token store (keyed by UUID token)
+// Reset tokens stay in-memory (short-lived, 15 min, single-use)
 const resetTokenStore = new Map<string, { email: string; expiresAt: number }>();
 
 function generateOTP(): string {
@@ -69,8 +68,10 @@ export const authController = {
       const user = await userRepository.findByEmail(email);
       if (user) {
         const otp = generateOTP();
-        const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
-        otpStore.set(email, { otp, username: user.username, expiresAt, attempts: 0 });
+        // Upsert: replaces any existing OTP for this email — one OTP at a time, 3 min expiry
+        await otpRepository.upsert(email, otp);
+
+        console.log(`[OTP] Generated for ${email}: ${otp} (expires in ${otpRepository.expiryMinutes} min)`);
 
         // Fire-and-forget — never block the HTTP response on SMTP
         sendOtpEmail(email, otp, user.username).catch((mailErr) => {
@@ -78,7 +79,7 @@ export const authController = {
         });
       }
 
-      // Always respond with success to prevent email enumeration
+      // Always respond 200 to prevent email enumeration
       sendSuccess(res, { sent: true }, 200, undefined, "If an account exists, a reset code has been sent");
     } catch (err) {
       next(err);
@@ -89,25 +90,26 @@ export const authController = {
     try {
       const { email, otp } = req.body as { email: string; otp: string };
 
-      const record = otpStore.get(email);
+      const record = await otpRepository.findByEmail(email);
       if (!record) throw new UnauthorizedError("OTP not found or expired. Please request a new one.");
-      if (Date.now() > record.expiresAt) {
-        otpStore.delete(email);
-        throw new UnauthorizedError("OTP has expired. Please request a new one.");
+
+      if (new Date() > record.expiresAt) {
+        await otpRepository.delete(email);
+        throw new UnauthorizedError("OTP has expired (3 minutes). Please request a new one.");
       }
 
-      record.attempts += 1;
-      if (record.attempts > 5) {
-        otpStore.delete(email);
+      const attempts = await otpRepository.incrementAttempts(email);
+      if (attempts > otpRepository.maxAttempts) {
+        await otpRepository.delete(email);
         throw new UnauthorizedError("Too many attempts. Please request a new OTP.");
       }
 
-      if (record.otp !== otp) {
-        throw new UnauthorizedError("Invalid OTP. Please try again.");
+      if (record.code !== otp) {
+        throw new UnauthorizedError(`Invalid OTP. ${otpRepository.maxAttempts - attempts} attempt(s) remaining.`);
       }
 
-      // OTP valid — issue reset token (valid for 15 minutes)
-      otpStore.delete(email);
+      // OTP valid — delete it and issue a short-lived reset token
+      await otpRepository.delete(email);
       const resetToken = randomUUID();
       resetTokenStore.set(resetToken, { email, expiresAt: Date.now() + 15 * 60 * 1000 });
 
